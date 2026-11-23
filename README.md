@@ -29,7 +29,7 @@ in plain CSV files that a person fills in and that the scripts then apply.
 | 1. Cleaning | `clean.py` → `data/subventions_clean.csv`, `data/a_verifier.csv` | done |
 | 2. Beneficiary merges | `fusions.py` + `ref/fusions.csv` (decisions) | done |
 | 3. Categorisation | `categorize.py` + `ref/objets_politiques.csv` → `data/subventions_final.csv` | done |
-| 4. Dashboard | — | to do |
+| 4. Dashboard | `build_dashboard.py` → `dashboard.html` | done |
 
 `categorize.py` applies the merges, gives each beneficiary ID a single display name
 (`nom_affichage`), maps each of the 131 grant objects to the Department's official strategic
@@ -38,11 +38,17 @@ a beneficiary type from the name (municipality, inter-municipal body, school, so
 association, public body, other) with ordered keyword rules, and flags €0 grants so that they are
 left out of totals.
 
-Requires Python 3 and pandas. To rebuild everything from the raw file:
+`build_dashboard.py` writes `dashboard.html`, a single self-contained page (plotly embedded, works
+offline) in French: key figures, amounts by year and public policy, one small chart per policy,
+breakdown by beneficiary type, top 15 beneficiaries, and a data quality and limitations box. Each
+chart has a data table underneath.
+
+Requires Python 3, pandas and plotly. To rebuild everything from the raw file:
 
 ```
 python clean.py
 python categorize.py
+python build_dashboard.py
 ```
 
 `python fusions.py` only regenerates the blank decision file `ref/fusions.csv`, and refuses to
