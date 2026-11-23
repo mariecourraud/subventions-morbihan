@@ -27,13 +27,20 @@ in plain CSV files that a person fills in and that the scripts then apply.
 |---|---|---|
 | 1. Cleaning | `clean.py` → `data/subventions_clean.csv`, `data/a_verifier.csv` | done |
 | 2. Beneficiary merges | `fusions.py` + `ref/fusions.csv` (decisions) | done |
-| 3. Categorisation | `categorize.py` (will apply the merges via `appliquer_fusions()`) | to do |
+| 3. Categorisation | `categorize.py` + `ref/objets_politiques.csv` → `data/subventions_final.csv` | done |
 | 4. Dashboard | — | to do |
 
-Requires Python 3 and pandas. To rebuild the cleaned data from the raw file:
+`categorize.py` applies the merges, gives each beneficiary ID a single display name
+(`nom_affichage`), maps each of the 131 grant objects to one of 10 departmental policies, infers
+a beneficiary type from the name (municipality, inter-municipal body, school, social landlord,
+association, public body, other) with ordered keyword rules, and flags €0 grants so that they are
+left out of totals.
+
+Requires Python 3 and pandas. To rebuild everything from the raw file:
 
 ```
 python clean.py
+python categorize.py
 ```
 
 `python fusions.py` only regenerates the blank decision file `ref/fusions.csv`, and refuses to
@@ -59,10 +66,13 @@ overwrite an existing one, so recorded decisions cannot be lost by accident.
 - **Merges** are decided case by case in `ref/fusions.csv` (kept ID + reason). 12 names were
   merged (30 rows); *Club de l'amitié* and *Club du bel âge* were kept separate because these names
   belong to different clubs in different towns.
-- **€0 amounts** are kept in the data and listed in `data/a_verifier.csv` for review.
+- **€0 amounts** are kept in the data and listed in `data/a_verifier.csv` for review, but they are
+  excluded from totals (`inclus_totaux = False`) so they do not distort counts or averages.
 - **Anonymised beneficiaries** ("Tiers anonymisé", 61 rows) are never renamed, even when their ID
   also appears with a real name, so the publisher's anonymisation is respected.
-- **Categories** will be validated by hand before they are used in the dashboard.
+- **Categories:** each of the 131 grant objects has a policy, a justification and a confidence level
+  in `ref/objets_politiques.csv` (82 high, 41 medium, 8 low). I reviewed and validated the 49
+  medium- and low-confidence mappings before they were used.
 
 ## Use of AI
 
@@ -75,4 +85,8 @@ overwrite an existing one, so recorded decisions cannot be lost by accident.
 ## Limitations and next steps
 
 - The open dataset stops at 2023.
+- Categories are assigned per grant object, not per grant: "Rapports spéciaux" (€18.7 M of
+  one-off projects with varied purposes) is classed as *Other* as a whole.
+- The beneficiary type comes from the name only: 1,870 rows (€59.2 M) stay *Other*, mostly
+  associations whose name gives no clue.
 - Next step: extract 2024–2026 grants from the PDF reports of the Commission permanente.
