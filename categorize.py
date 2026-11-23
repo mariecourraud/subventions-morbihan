@@ -3,11 +3,12 @@
 Entrée  : data/subventions_clean.csv (produit par clean.py)
 Référentiels (décisions humaines) :
           ref/fusions.csv            fusions d'identifiants (appliquées via fusions.py)
-          ref/objets_politiques.csv  objet -> grande politique départementale
+          ref/objets_politiques.csv  objet -> politique publique / sectorielle
+                                     (segmentation stratégique du Département au 01/01/2025)
 Sortie  : data/subventions_final.csv (UTF-8)
 
-Ajoute les colonnes : nom_affichage, idBeneficiaire_original, politique, type_beneficiaire,
-inclus_totaux.
+Ajoute les colonnes : nom_affichage, idBeneficiaire_original, politique_publique,
+politique_sectorielle, type_beneficiaire, inclus_totaux.
 Les montants à 0 € restent dans le fichier mais sont exclus des totaux (inclus_totaux = False).
 """
 from pathlib import Path
@@ -92,15 +93,71 @@ def ajouter_nom_affichage(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # --------------------------------------------------------------- Politiques
+# Segmentation stratégique officielle du Département au 01/01/2025 (deux niveaux),
+# appliquée rétroactivement aux données 2020-2023.
+GRILLE = {
+    "SOLIDARITÉS HUMAINES": [
+        "Enfance et famille",
+        "Insertion et développement social",
+        "Personnes handicapées",
+        "Personnes âgées",
+    ],
+    "SOLIDARITÉ DES TERRITOIRES": [
+        "Accompagnement des territoires (dont aides aux territoires, animation locale)",
+        "Aménagement numérique",
+        "Prévention des risques et sécurité civile (dont SDIS)",
+        "Habitat",
+        "Aménagement foncier rural",
+    ],
+    "INFRASTRUCTURES ET MOBILITÉ": [
+        "Routes départementales et ouvrages d'art",
+        "Aménagements cyclables",
+        "Développement portuaire (dont Compagnie des ports)",
+        "Développement ferroviaire",
+    ],
+    "ENVIRONNEMENT": [
+        "Espaces naturels et activités de nature (dont ENS, randonnées, bocage et forêts)",
+        "Eau",
+        "Soutien au monde agricole",
+        "Expertises et analyses en environnement",
+    ],
+    "ÉDUCATION": [
+        "Collèges",
+        "Jeunesse et partenariats éducatifs (dont plan jeunesse, enseignement supérieur, "
+        "université tous les âges)",
+    ],
+    "ATTRACTIVITÉ ET ANIMATION TERRITORIALES": ["Culture", "Sports", "Tourisme"],
+    "RESSOURCES": [
+        "Ressources humaines (dont action sociale du personnel)",
+        "Moyens des services",
+        "Gestion et fonctionnement de l'assemblée",
+        "Ressources financières",
+    ],
+}
+# Objet trop générique pour être classé avec certitude (dans les deux colonnes)
+NON_VENTILE = "Non ventilé"
+
+
 def ajouter_politique(df: pd.DataFrame) -> pd.DataFrame:
-    ref = lire_csv(OBJETS)[["objet", "politique"]]
+    """Ajoute politique_publique et politique_sectorielle d'après l'objet de la subvention."""
+    ref = lire_csv(OBJETS)[["objet", "politique_publique", "politique_sectorielle"]]
     manquants = set(df["objet"]) - set(ref["objet"])
     if manquants:
         raise ValueError(f"Objets absents de {OBJETS.name} (à classer d'abord) : {sorted(manquants)}")
     if ref["objet"].duplicated().any():
         raise ValueError(f"Objets en double dans {OBJETS.name}")
+
+    couples_valides = {(pp, ps) for pp, liste in GRILLE.items() for ps in liste}
+    couples_valides.add((NON_VENTILE, NON_VENTILE))
+    invalides = ref[[c not in couples_valides
+                     for c in zip(ref["politique_publique"], ref["politique_sectorielle"])]]
+    if not invalides.empty:
+        raise ValueError(f"Intitulés hors grille dans {OBJETS.name} :\n{invalides.to_string()}")
+
+    ref = ref.set_index("objet")
     pos = df.columns.get_loc("objet") + 1
-    df.insert(pos, "politique", df["objet"].map(ref.set_index("objet")["politique"]))
+    df.insert(pos, "politique_publique", df["objet"].map(ref["politique_publique"]))
+    df.insert(pos + 1, "politique_sectorielle", df["objet"].map(ref["politique_sectorielle"]))
     return df
 
 
@@ -127,15 +184,26 @@ def main() -> pd.DataFrame:
     print("\nType de bénéficiaire (lignes)")
     print(df["type_beneficiaire"].value_counts().to_string())
 
-    totaux = df[df["inclus_totaux"]]
-    tableau = totaux.pivot_table(index="politique", columns="annee", values="montant",
-                                 aggfunc="sum", fill_value=0, margins=True, margins_name="Total")
-    tableau = tableau.sort_values("Total", ascending=False)
-    tableau = pd.concat([tableau.drop("Total"), tableau.loc[["Total"]]])
-    fmt = lambda x: f"{x / 1e6:,.1f}".replace(",", " ").replace(".", ",")
-    print("\nMontants par politique et par année (M€, hors montants à 0 €)")
-    print(tableau.to_string(formatters={c: fmt for c in tableau.columns}))
+    print("\nMontants par politique publique et par année (M€, hors montants à 0 €)")
+    print(tableau_politiques(df).to_string())
     return df
+
+
+def tableau_politiques(df: pd.DataFrame) -> pd.DataFrame:
+    """Montants (M€, 1 décimale) par politique publique et par année, avec la part du total.
+    Ordre de la grille officielle, « Non ventilé » en dernier."""
+    totaux = df[df["inclus_totaux"]]
+    t = totaux.pivot_table(index="politique_publique", columns="annee", values="montant",
+                           aggfunc="sum", fill_value=0)
+    ordre = [p for p in [*GRILLE, NON_VENTILE] if p in t.index]
+    t = t.loc[ordre]
+    t["Total"] = t.sum(axis=1)
+    t.loc["Total"] = t.sum()
+    part = (t["Total"] / t.loc["Total", "Total"] * 100).round(1)
+    t = (t / 1e6).round(1)
+    t.columns = [str(c) for c in t.columns]
+    t["Part (%)"] = part
+    return t
 
 
 if __name__ == "__main__":
