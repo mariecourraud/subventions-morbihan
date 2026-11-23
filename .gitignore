@@ -37,3 +37,6 @@ desktop.ini
 
 # --- Secrets ---
 .env
+
+# --- Configuration locale de Claude Code ---
+.claude/
