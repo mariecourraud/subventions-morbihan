@@ -9,7 +9,8 @@ in plain CSV files that a person fills in and that the scripts then apply.
 ## Data
 
 - **Source:** data.gouv.fr, *Subventions aux personnes morales*, published by the Département du
-  Morbihan: <!-- TODO: add dataset URL -->
+  Morbihan: <https://www.data.gouv.fr/datasets/subventions-aux-personnes-morales/>
+  (downloaded on 23 November 2026)
 - **Licence:** Licence Ouverte (Etalab open licence)
 - **Coverage:** 2020–2023, 12,514 grants to 1,900 beneficiaries, €417.0 M in total
 - **Format:** SCDL (the French national schema for grant data), `;`-separated, Windows-1252
