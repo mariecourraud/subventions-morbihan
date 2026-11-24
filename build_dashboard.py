@@ -366,6 +366,114 @@ def section_renouvellement(df: pd.DataFrame) -> tuple[dict, str]:
     return figs, html
 
 
+# ---------------------------------------------------------------- Carte de chaleur : Insertion – hors FSE
+TYPE_COURT = {"Association": "Assoc.", "Intercommunalité": "Interco.", "Établissement public": "Étab. public",
+              "Bailleur social": "Bailleur", "Commune": "Commune", "Collège": "Collège", "Autre": "Autre"}
+SYMBOLE_PLURI = "◆"
+# Gamme séquentielle bleue (clair = faible, foncé = élevé) ; elle démarre au cran 150 pour qu'un
+# petit montant reste nettement bleu, distinct des cases vides (gris neutre).
+GAMME_BLEUE = [[0, "#b7d3f6"], [0.25, "#86b6ef"], [0.5, "#3987e5"], [0.75, "#1c5cab"], [1, "#0d366b"]]
+
+
+def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame, n: int = 40) -> tuple[go.Figure, str]:
+    """Carte de chaleur des n premiers bénéficiaires d'« Insertion – hors FSE », par année + Total."""
+    import numpy as np
+    from renouvellement import couples, lignes_sh  # import ici : renouvellement importe ce module
+
+    s = tot[tot["groupe_evolution"] == IDS_HORS]
+    anon = s["nom_affichage"] == ANONYME
+    zeros = int(((~df["inclus_totaux"]) & (df["groupe_evolution"] == IDS_HORS)).sum())
+    nommes = s[~anon]
+    annees = sorted(tot["annee"].unique())
+    p = nommes.pivot_table(index=["idBeneficiaire", "nom_affichage"], columns="annee", values="montant",
+                           aggfunc="sum").reindex(columns=annees)
+    p["Total"] = p.sum(axis=1)
+    p = p.sort_values("Total", ascending=False)
+    nb_benef, total_groupe = len(p), p["Total"].sum()
+    p = p.head(n)
+
+    # Type et « pluriannuel probable » (calculé, dans renouvellement.py, sur le groupe Insertion hors FSE)
+    types = nommes.groupby("idBeneficiaire")["type_beneficiaire"].first()
+    c = couples(lignes_sh(df))
+    pl = c[c["politique_affichage"] == IDS].set_index("idBeneficiaire")
+    ids = p.index.get_level_values(0)
+    noms = p.index.get_level_values(1)
+    pluri = [bool(pl["pluriannuel_probable"].get(i, False)) for i in ids]
+    motif = [pl["motif_pluriannuel"].get(i, "") for i in ids]
+
+    def raccourci(nom: str, lg: int = 34) -> str:
+        return nom if len(nom) <= lg else nom[:lg - 1].rstrip() + "…"
+    # Libellé de ligne : symbole + nom raccourci ; le type est écrit à part, dans une colonne alignée à gauche
+    etiquettes = [f"{SYMBOLE_PLURI + ' ' if pr else ''}{raccourci(nm)}" for nm, pr in zip(noms, pluri)]
+    if len(set(etiquettes)) < len(etiquettes):  # deux noms raccourcis identiques : on les distingue
+        etiquettes = [f"{e} ({i})" for e, i in zip(etiquettes, ids)]
+
+    val = p[annees].to_numpy(dtype=float)
+    vide = np.isnan(val)
+    tot_col = p[["Total"]].to_numpy(dtype=float)
+    lg = lambda a: np.log10(np.where(a > 0, a, np.nan))
+    zmin, zmax = np.nanmin(lg(val)), np.nanmax(lg(val))
+    ticks = [t for t in range(3, 8) if zmin - 0.3 <= t <= zmax + 0.3]
+    etiq_ticks = {3: "1 k€", 4: "10 k€", 5: "100 k€", 6: "1 M€", 7: "10 M€"}
+
+    survol = [[f"<b>{escape(nm)}</b><br>{escape(types[i])}<br>{a} : "
+               + (euros(v) if not np.isnan(v) else "aucune subvention")
+               + (f"<br>{SYMBOLE_PLURI} pluriannuel probable : {escape(mo)}" if pr else "")
+               for a, v in zip(annees, ligne)]
+              for i, nm, ligne, pr, mo in zip(ids, noms, val, pluri, motif)]
+    survol_tot = [[f"<b>{escape(nm)}</b><br>Total {annees[0]}–{annees[-1]} : {euros(t)}"]
+                  for nm, t in zip(noms, tot_col[:, 0])]
+
+    x_an = [str(a) for a in annees]
+    fig = make_subplots(rows=1, cols=2, shared_yaxes=True, column_widths=[0.8, 0.2],
+                        horizontal_spacing=0.025)
+    # Cases vides : trace grise séparée, sous la trace des montants
+    fig.add_heatmap(z=np.where(vide, 1.0, np.nan), x=x_an, y=etiquettes, meta="vide",
+                    colorscale=[[0, L["grid"]], [1, L["grid"]]], showscale=False, xgap=2, ygap=2,
+                    customdata=survol, hovertemplate="%{customdata}<extra></extra>", row=1, col=1)
+    fig.add_heatmap(z=lg(val), x=x_an, y=etiquettes, colorscale=GAMME_BLEUE, zmin=zmin, zmax=zmax,
+                    xgap=2, ygap=2, customdata=survol, hovertemplate="%{customdata}<extra></extra>",
+                    colorbar=dict(title=dict(text="Montant de l'année (échelle log)", side="top"),
+                                  orientation="h", x=0.4, xanchor="center", y=-0.01, yanchor="top",
+                                  len=0.6, thickness=10, tickvals=ticks,
+                                  ticktext=[etiq_ticks[t] for t in ticks], outlinewidth=0),
+                    row=1, col=1)
+    # Colonne Total, séparée, sur sa propre échelle, avec le montant écrit dans la case
+    fig.add_heatmap(z=lg(tot_col), x=["Total"], y=etiquettes, colorscale=GAMME_BLEUE, showscale=False,
+                    xgap=2, ygap=2, text=[[f"{fr(t / 1e3, 0)} k€"] for t in tot_col[:, 0]],
+                    texttemplate="%{text}", textfont=dict(size=11),
+                    customdata=survol_tot, hovertemplate="%{customdata}<extra></extra>", row=1, col=2)
+    marge_g = 330
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11, color=L["ink2"]), showgrid=False,
+                     automargin=False)
+    fig.update_yaxes(showticklabels=False, row=1, col=2)
+    fig.update_xaxes(type="category", side="top", showgrid=False, showline=False,
+                     tickfont=dict(color=L["ink2"]))
+    # Colonne « type » : annotations calées sur le bord gauche de la figure (décalage en pixels)
+    fig.add_annotation(x=0, y=-0.5, xref="paper", yref="y", text="<b>Type</b>", showarrow=False,
+                       xanchor="left", xshift=-marge_g + 8, yshift=14, font=dict(size=11, color=L["ink2"]))
+    for e, i in zip(etiquettes, ids):
+        fig.add_annotation(x=0, y=e, xref="paper", yref="y", text=TYPE_COURT.get(types[i], types[i]),
+                           showarrow=False, xanchor="left", xshift=-marge_g + 8,
+                           font=dict(size=11, color=L["muted"]))
+    fig = mise_en_page(fig, 24 * len(p) + 160)
+    fig.update_layout(margin=dict(l=marge_g, t=40, b=80))
+
+    note_excl = ("Exclus : les tiers anonymisés"
+                 + (f" ({int(anon.sum())} subventions, {euros(s.loc[anon, 'montant'].sum())})" if anon.any()
+                    else " (aucun dans ce sous-groupe)")
+                 + f" et les montants à 0 € ({zeros} subvention{'s' if zeros > 1 else ''}).")
+    html = f"""
+<section class="card">
+  <h2>Insertion – hors FSE : les {len(p)} premiers bénéficiaires par année, {annees[0]}–{annees[-1]}</h2>
+  <p class="sous">Subventions du groupe Insertion et développement social dont l'objet n'est pas « {OBJET_FSE} ». Couleur : montant de l'année, du clair (faible) au foncé (élevé), sur une échelle logarithmique ; case grise = aucune subvention cette année-là. Colonne Total sur sa propre échelle. {SYMBOLE_PLURI} = pluriannuel probable. Ces {len(p)} bénéficiaires représentent {fr(p['Total'].sum() / total_groupe * 100)} % des {meur(total_groupe)} du sous-groupe ({nb_benef} bénéficiaires nommés).</p>
+  {{div_hors_fse}}
+  <p class="note">Les montants sont enregistrés l'année de la décision : une convention pluriannuelle apparaît en une seule fois, suivie d'années sans montant, sans que le financement ait cessé.</p>
+  <p class="note">{escape(note_excl)} {SYMBOLE_PLURI} Pluriannuel probable : financé une année sur deux ou sur trois, ou une année à plus de 2 fois son montant médian. Noms raccourcis : nom complet au survol.</p>
+</section>"""
+    return fig, html
+
+
 # ---------------------------------------------------------------- Solidarités : principaux bénéficiaires
 ANONYME = "Tiers anonymisé"
 
@@ -488,10 +596,12 @@ def main() -> None:
     }
     figs_renouv, renouv_html = section_renouvellement(df)
     figs |= figs_renouv
+    figs["hors_fse"], hors_fse_html = carte_hors_fse(df, tot)
     config = dict(displayModeBar=False, responsive=True)
     div = {k: f.to_html(full_html=False, include_plotlyjs=False, div_id=f"fig-{k}", config=config)
            for k, f in figs.items()}
     renouv_html = renouv_html.replace("{div_taux}", div["taux"]).replace("{div_flux}", div["flux"])
+    hors_fse_html = hors_fse_html.replace("{div_hors_fse}", div["hors_fse"])
 
     # Tableaux (équivalent accessible de chaque graphique)
     tab_pol = t.copy()
@@ -673,6 +783,7 @@ footer a {{ color: inherit; }}
   <p class="sous">Les 10 premiers bénéficiaires de chaque groupe des Solidarités humaines, par montant total ; le groupe Insertion est présenté en deux tableaux (FSE et hors FSE). Une structure qui reçoit les deux types de subventions apparaît dans les deux, avec le montant propre à chacun. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
   {solidarites_html}
 </section>
+{hors_fse_html}
 {renouv_html}
 
 <footer>
@@ -703,6 +814,7 @@ footer a {{ color: inherit; }}
       if (gd.layout.legend) lay["legend.font.color"] = th.ink2;
       Plotly.relayout(gd, lay);
       gd.data.forEach(function (tr, i) {{
+        if (tr.meta === "vide") {{ Plotly.restyle(gd, {{ colorscale: [[[0, th.grid], [1, th.grid]]] }}, [i]); return; }}
         var c = th.series[tr.meta];
         if (!c) return;
         var s = {{ "marker.color": c, "marker.line.color": th.surface }};
