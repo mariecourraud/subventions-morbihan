@@ -95,7 +95,7 @@ JS_ECRAN_ETROIT = r"""
     }
     if (gd.id === "fig-hors_fse") {
       u["margin.l"] = 148;
-      u["xaxis.domain"] = [0, 0.62]; u["xaxis2.domain"] = [0.66, 1];   // colonne Total plus large
+      u["xaxis.domain"] = [0, 0.62]; u["xaxis2.domain"] = [0.66, 1];   // colonne Moyenne plus large
       var ans = gd.data[1].x || [];                                     // années abrégées : ’20, ’21…
       u["xaxis.tickmode"] = "array"; u["xaxis.tickvals"] = ans; u["xaxis.tickangle"] = 0;
       u["xaxis.ticktext"] = ans.map(function (a) { return "’" + String(a).slice(-2); });
@@ -568,7 +568,11 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame) -> tuple[go.Figure, str]
     p = nommes.pivot_table(index=["idBeneficiaire", "nom_affichage"], columns="annee", values="montant",
                            aggfunc="sum").reindex(columns=annees)
     p["Total"] = p.sum(axis=1)
-    p = p.sort_values("Total", ascending=False)
+    # Moyenne par année financée : total ÷ nombre d'années avec au moins une subvention ;
+    # les lignes sont classées sur cette moyenne (à égalité, sur le total)
+    p["Années"] = p[annees].notna().sum(axis=1)
+    p["Moyenne"] = p["Total"] / p["Années"]
+    p = p.sort_values(["Moyenne", "Total"], ascending=False)
     nb_benef, total_groupe = len(p), p["Total"].sum()
     visibles = min(PAR_PAGE, nb_benef)
 
@@ -591,6 +595,8 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame) -> tuple[go.Figure, str]
     val = p[annees].to_numpy(dtype=float)
     vide = np.isnan(val)
     tot_col = p[["Total"]].to_numpy(dtype=float)
+    n_ans = p["Années"].to_numpy()
+    moy_col = p["Moyenne"].to_numpy(dtype=float)
     lg = lambda a: np.log10(np.where(a > 0, a, np.nan))
     zmin, zmax = np.nanmin(lg(val)), np.nanmax(lg(val))
     ticks = [t for t in range(3, 8) if zmin - 0.3 <= t <= zmax + 0.3]
@@ -601,8 +607,9 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame) -> tuple[go.Figure, str]
                + (f"<br>{SYMBOLE_PLURI} pluriannuel probable : {escape(mo)}" if pr else "")
                for a, v in zip(annees, ligne)]
               for i, nm, ligne, pr, mo in zip(ids, noms, val, pluri, motif)]
-    survol_tot = [[f"<b>{escape(nm)}</b><br>Total {annees[0]}–{annees[-1]} : {euros(t)}"]
-                  for nm, t in zip(noms, tot_col[:, 0])]
+    survol_moy = [[f"<b>{escape(nm)}</b><br>Moyenne par année financée : {euros(m)}"
+                   f"<br>soit {euros(t)} sur {k} année{'s' if k > 1 else ''}"]
+                  for nm, m, t, k in zip(noms, moy_col, tot_col[:, 0], n_ans)]
 
     x_an = [str(a) for a in annees]
     fig = make_subplots(rows=1, cols=2, shared_yaxes=True, column_widths=[0.8, 0.2],
@@ -618,12 +625,13 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame) -> tuple[go.Figure, str]
                                   len=0.6, thickness=10, tickvals=ticks,
                                   ticktext=[etiq_ticks[t] for t in ticks], outlinewidth=0),
                     row=1, col=1)
-    # Colonne Total, séparée, sur sa propre échelle, avec le montant écrit dans la case.
-    # À FAIRE : recalculer cette colonne en moyenne annuelle (au lieu du total de la période).
-    fig.add_heatmap(z=lg(tot_col), x=["Total"], y=etiquettes, colorscale=GAMME_INSERTION, showscale=False,
-                    xgap=2, ygap=2, text=[[f"{fr(t / 1e3, 0)} k€"] for t in tot_col[:, 0]],
-                    texttemplate="%{text}", textfont=dict(size=11),
-                    customdata=survol_tot, hovertemplate="%{customdata}<extra></extra>", row=1, col=2)
+    # Colonne Moyenne (par année financée), séparée, sur la même échelle de couleur que les années
+    # (c'est aussi un montant annuel), avec le montant écrit dans la case
+    fig.add_heatmap(z=lg(moy_col.reshape(-1, 1)), x=["Moyenne"], y=etiquettes, colorscale=GAMME_INSERTION,
+                    zmin=zmin, zmax=zmax, showscale=False, xgap=2, ygap=2,
+                    text=[[f"{fr(m / 1e3, 0)} k€" if m >= 1000 else f"{fr(m, 0)} €"] for m in moy_col], texttemplate="%{text}",
+                    textfont=dict(size=11),
+                    customdata=survol_moy, hovertemplate="%{customdata}<extra></extra>", row=1, col=2)
     marge_g = 330
     # Axe inversé (1er en haut), limité aux PAR_PAGE premières lignes ; le défilement déplace cette fenêtre
     fig.update_yaxes(autorange=False, range=[visibles - 0.5, -0.5], fixedrange=True,
@@ -656,7 +664,7 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame) -> tuple[go.Figure, str]
     html = f"""
 <section class="card" id="hors-fse">
   <h2>Insertion – hors FSE : bénéficiaires par année, {annees[0]}–{annees[-1]}</h2>
-  <p class="sous">Subventions du groupe Insertion et développement social dont l'objet n'est pas « {OBJET_FSE} » : les {nb_benef} bénéficiaires nommés ({meur(total_groupe)}), classés du plus gros au plus petit montant total ; {PAR_PAGE} lignes visibles, faites défiler pour voir les autres. Couleur : montant de l'année, du clair (faible) au foncé (élevé), sur une échelle logarithmique ; case grise = aucune subvention cette année-là. Colonne Total sur sa propre échelle. {SYMBOLE_PLURI} = pluriannuel probable.</p>
+  <p class="sous">Subventions du groupe Insertion et développement social dont l'objet n'est pas « {OBJET_FSE} » : les {nb_benef} bénéficiaires nommés ({meur(total_groupe)}), classés par montant moyen par année financée, du plus élevé au plus faible ; {PAR_PAGE} lignes visibles, faites défiler pour voir les autres. Couleur : montant de l'année, du clair (faible) au foncé (élevé), sur une échelle logarithmique ; case grise = aucune subvention cette année-là. Colonne Moyenne : montant moyen par année financée (total du bénéficiaire divisé par le nombre d'années où il a reçu au moins une subvention), sur la même échelle de couleur. {SYMBOLE_PLURI} = pluriannuel probable.</p>
   {defilement}
   {{div_hors_fse}}
   <p class="note">Les montants sont enregistrés l'année de la décision : une convention pluriannuelle apparaît en une seule fois, suivie d'années sans montant, sans que le financement ait cessé.</p>
@@ -752,6 +760,10 @@ def main() -> None:
                "l'évolution à périmètre comparable ; elle se confond avec la courbe pleine dès que Morbihan Habitat "
                "n'y figure plus.")
 
+    def avec_renvoi(t: str) -> str:
+        """« Commune » porte un astérisque renvoyant à la note sous le graphique."""
+        return t + "*" if t == "Commune" else t
+
     types = (tot.groupby("type_beneficiaire")
              .agg(montant=("montant", "sum"), subventions=("id", "size"),
                   beneficiaires=("idBeneficiaire", "nunique"))
@@ -778,7 +790,7 @@ def main() -> None:
     figs = {
         "empile": fig_empile(t),
         "types": fig_barres_h(
-            types.index.tolist(), types["montant"],
+            [avec_renvoi(t) for t in types.index], types["montant"],
             [f"{fr(r.subventions, 0)} subventions · {fr(r.beneficiaires, 0)} bénéficiaires"
              for r in types.itertuples()], 330),
         "top": fig_barres_h(
@@ -812,7 +824,7 @@ def main() -> None:
     tab_evol.columns = [str(c) for c in tab_evol.columns]
 
     tab_types = pd.DataFrame({
-        "Type de bénéficiaire": types.index,
+        "Type de bénéficiaire": [avec_renvoi(t) for t in types.index],
         "Montant (M€)": [fr(x / 1e6) for x in types["montant"]],
         "Part": [f"{fr(x / montant * 100)} %" for x in types["montant"]],
         "Subventions": [fr(x, 0) for x in types["subventions"]],
@@ -1098,7 +1110,7 @@ footer a {{ color: inherit; }}
 
 <nav class="sommaire" aria-label="Sommaire">
   <div class="som-groupe"><button type="button" class="som-btn" aria-expanded="false" aria-controls="som-depense"><span>Dépense globale</span><span class="som-fleche" aria-hidden="true"></span></button><div class="som-menu" id="som-depense" hidden><a href="#montants">Montants</a><a href="#evolution">Évolution</a><a href="#types">Typologie de bénéficiaires</a><a href="#top15">Principaux bénéficiaires</a></div></div>
-  <div class="som-groupe"><button type="button" class="som-btn" aria-expanded="false" aria-controls="som-solid">Solidarités<span class="som-fleche" aria-hidden="true"></span></button><div class="som-menu" id="som-solid" hidden><a href="#solidarites">Principaux bénéficiaires par politique</a><a href="#hors-fse">Bénéficiaires par année</a><a href="#renouvellement">Renouvellement des bénéficiaires</a></div></div>
+  <div class="som-groupe"><button type="button" class="som-btn" aria-expanded="false" aria-controls="som-solid">Solidarités<span class="som-fleche" aria-hidden="true"></span></button><div class="som-menu" id="som-solid" hidden><a href="#solidarites">Principaux bénéficiaires</a><a href="#hors-fse">Bénéficiaires par année</a><a href="#renouvellement">Renouvellement des bénéficiaires</a></div></div>
   <div class="som-groupe"><a class="som-btn" href="#limites">Limites</a></div>
 </nav>
 
@@ -1122,6 +1134,7 @@ footer a {{ color: inherit; }}
   <h2>Répartition par typologie de bénéficiaires</h2>
   <p class="sous">Montant total sur la période. Typologie déduite du nom du bénéficiaire.</p>
   {div['types']}
+  <p class="note">* Une commune peut recevoir un financement direct (ex : aménagements) ou à destination d'un établissement public ou une association dont elle est gestionnaire.</p>
   <details><summary>Voir les données</summary>{table_html(tab_types)}</details>
 </section>
 
