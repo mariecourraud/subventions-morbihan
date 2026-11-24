@@ -946,18 +946,17 @@ section[id] {{ scroll-margin-top: 80px; }}
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
   box-shadow: 0 10px 30px rgba(20,20,10,.12); display: flex; flex-direction: column; gap: 2px; }}
 .som-menu[hidden] {{ display: none; }}
-.som-groupe:last-child .som-menu {{ left: auto; right: 0; }}
+.som-groupe:nth-last-child(2) .som-menu {{ left: auto; right: 0; }}
 .som-menu a {{ padding: 8px 12px; border-radius: 9px; font-size: .86rem; color: var(--ink2); text-decoration: none; white-space: nowrap; }}
 .som-menu a:hover {{ background: var(--band1); color: var(--ink); }}
 .som-menu a.actif {{ color: var(--ink); font-weight: 600; background: var(--band1); }}
 @media print {{ .sommaire {{ display: none; }} }}
 @media (max-width: 520px) {{
   .sommaire {{ flex-wrap: nowrap; gap: 0; padding: 5px; }}
-  .som-long {{ display: none; }}
   .som-btn {{ font-size: .8rem; padding: 6px 9px; gap: 5px; }}
   /* Menus ouverts sur toute la largeur de la barre, sous elle */
   .som-groupe {{ position: static; }}
-  .som-menu, .som-groupe:last-child .som-menu {{ left: 6px; right: 6px; min-width: 0; transform: none; }}
+  .som-menu, .som-groupe:nth-last-child(2) .som-menu {{ left: 6px; right: 6px; min-width: 0; transform: none; }}
   .som-menu a {{ white-space: normal; }}
 }}
 
@@ -1098,10 +1097,9 @@ footer a {{ color: inherit; }}
 </header>
 
 <nav class="sommaire" aria-label="Sommaire">
-  <div class="som-groupe"><button type="button" class="som-btn" aria-expanded="false" aria-controls="som-depense">Dépense<span class="som-long">&nbsp;globale</span><span class="som-fleche" aria-hidden="true"></span></button><div class="som-menu" id="som-depense" hidden><a href="#montants">Montants</a><a href="#evolution">Évolution</a></div></div>
-  <div class="som-groupe"><button type="button" class="som-btn" aria-expanded="false" aria-controls="som-benef">Bénéficiaires<span class="som-fleche" aria-hidden="true"></span></button><div class="som-menu" id="som-benef" hidden><a href="#types">Typologie</a><a href="#top15">Principaux bénéficiaires</a></div></div>
-  <div class="som-groupe"><a class="som-btn" href="#limites">Limites</a></div>
+  <div class="som-groupe"><button type="button" class="som-btn" aria-expanded="false" aria-controls="som-depense"><span>Dépense globale</span><span class="som-fleche" aria-hidden="true"></span></button><div class="som-menu" id="som-depense" hidden><a href="#montants">Montants</a><a href="#evolution">Évolution</a><a href="#types">Typologie de bénéficiaires</a><a href="#top15">Principaux bénéficiaires</a></div></div>
   <div class="som-groupe"><button type="button" class="som-btn" aria-expanded="false" aria-controls="som-solid">Solidarités<span class="som-fleche" aria-hidden="true"></span></button><div class="som-menu" id="som-solid" hidden><a href="#solidarites">Principaux bénéficiaires par politique</a><a href="#hors-fse">Bénéficiaires par année</a><a href="#renouvellement">Renouvellement des bénéficiaires</a></div></div>
+  <div class="som-groupe"><a class="som-btn" href="#limites">Limites</a></div>
 </nav>
 
 <section class="card" id="montants">
@@ -1120,26 +1118,12 @@ footer a {{ color: inherit; }}
   <p class="note">{escape(mh_note)}</p>
 </section>
 
-<div class="duo">
 <section class="card" id="types">
   <h2>Répartition par typologie de bénéficiaires</h2>
   <p class="sous">Montant total sur la période. Typologie déduite du nom du bénéficiaire.</p>
   {div['types']}
   <details><summary>Voir les données</summary>{table_html(tab_types)}</details>
 </section>
-
-<section class="card qualite" id="limites">
-  <h2>Qualité des données et limites</h2>
-  <ul>
-    <li><b>Montants à 0 € exclus :</b> {zeros} subventions à 0 € sont retirées des totaux et des comptages.</li>
-    <li><b>Fusions d'identifiants :</b> {int(fus.sum())} subventions ont été rattachées à un autre identifiant ({df.loc[fus, 'idBeneficiaire_original'].nunique()} identifiants fusionnés), après vérification au cas par cas des organismes enregistrés sous plusieurs identifiants.</li>
-    <li><b>« Non ventilé » :</b> {meur(nv)}, soit {fr(nv / montant * 100)} % du total ({nv_objets} objets sur {nb_objets}). L'intitulé de ces subventions est trop générique pour les rattacher à une politique sans deviner (principalement {nv_exemples}).</li>
-    <li><b>Affichage des Solidarités humaines :</b> pour la lecture, la politique publique est découpée en trois groupes (Enfance et famille ; Insertion et développement social ; Autonomie, qui réunit Personnes âgées et Personnes handicapées). La classification officielle n'est pas modifiée.</li>
-    <li><b>Grille appliquée après coup :</b> la segmentation stratégique en vigueur au 1<sup>er</sup> janvier 2025 est appliquée rétroactivement aux subventions votées de {a_min} à {a_max}, d'après l'objet de chaque subvention.</li>
-    <li><b>Type de bénéficiaire :</b> déduit du nom ; {meur(tot.loc[tot['type_beneficiaire'] == 'Autre', 'montant'].sum())} restent en « Autre » faute d'indice dans le nom.</li>
-  </ul>
-</section>
-</div>
 
 <section class="card" id="top15">
   <h2>Principaux bénéficiaires, {a_min}–{a_max}</h2>
@@ -1155,6 +1139,18 @@ footer a {{ color: inherit; }}
 </section>
 {hors_fse_html}
 {renouv_html}
+
+<section class="card qualite" id="limites">
+  <h2>Qualité des données et limites</h2>
+  <ul>
+    <li><b>Montants à 0 € exclus :</b> {zeros} subventions à 0 € sont retirées des totaux et des comptages.</li>
+    <li><b>Fusions d'identifiants :</b> {int(fus.sum())} subventions ont été rattachées à un autre identifiant ({df.loc[fus, 'idBeneficiaire_original'].nunique()} identifiants fusionnés), après vérification au cas par cas des organismes enregistrés sous plusieurs identifiants.</li>
+    <li><b>« Non ventilé » :</b> {meur(nv)}, soit {fr(nv / montant * 100)} % du total ({nv_objets} objets sur {nb_objets}). L'intitulé de ces subventions est trop générique pour les rattacher à une politique sans deviner (principalement {nv_exemples}).</li>
+    <li><b>Affichage des Solidarités humaines :</b> pour la lecture, la politique publique est découpée en trois groupes (Enfance et famille ; Insertion et développement social ; Autonomie, qui réunit Personnes âgées et Personnes handicapées). La classification officielle n'est pas modifiée.</li>
+    <li><b>Grille appliquée après coup :</b> la segmentation stratégique en vigueur au 1<sup>er</sup> janvier 2025 est appliquée rétroactivement aux subventions votées de {a_min} à {a_max}, d'après l'objet de chaque subvention.</li>
+    <li><b>Type de bénéficiaire :</b> déduit du nom ; {meur(tot.loc[tot['type_beneficiaire'] == 'Autre', 'montant'].sum())} restent en « Autre » faute d'indice dans le nom.</li>
+  </ul>
+</section>
 
 <footer>
   Source : Département du Morbihan, « Subventions aux personnes morales », data.gouv.fr, Licence Ouverte —
@@ -1215,16 +1211,25 @@ footer a {{ color: inherit; }}
   var obs = new IntersectionObserver(function (entrees) {{
     entrees.forEach(function (e) {{ visibles[e.target.id] = e.isIntersecting; }});
     if (Date.now() < pause) return;
-    // Première section visible dans l'ordre du sommaire (deux blocs côte à côte : celui de gauche)
+    // En bas de page, la dernière section ne peut pas remonter jusqu'au milieu de l'écran : on l'allume
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {{
+      marquer(liens[liens.length - 1].getAttribute("href").slice(1)); return;
+    }}
+    // Première section visible dans l'ordre du sommaire
     for (var i = 0; i < liens.length; i++) {{
       var id = liens[i].getAttribute("href").slice(1);
       if (visibles[id]) {{ marquer(id); return; }}
     }}
+    marquer(null);   // aucune section au milieu de l'écran (haut de page) : rien d'allumé
   }}, {{ rootMargin: "-25% 0px -55% 0px" }});
   liens.forEach(function (a) {{
     var cible = document.querySelector(a.getAttribute("href"));
     if (cible) obs.observe(cible);
   }});
+  window.addEventListener("scroll", function () {{
+    if (Date.now() >= pause && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4)
+      marquer(liens[liens.length - 1].getAttribute("href").slice(1));
+  }}, {{ passive: true }});
 }})();
 </script>
 <script>
