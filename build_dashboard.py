@@ -756,10 +756,24 @@ def main() -> None:
         "Subventions": [fr(x, 0) for x in top["subventions"]],
     })
 
-    solidarites_html = (bloc_solidarites(tot, EF)
-                        + bloc_solidarites(tot, IDS_FSE, colonne="groupe_evolution")
-                        + bloc_solidarites(tot, IDS_HORS, colonne="groupe_evolution")
-                        + bloc_solidarites(tot, AUTONOMIE))
+    # Onglets : un tableau visible à la fois (tous visibles sans script et à l'impression)
+    onglets = [
+        ("ef", "Enfance et famille", bloc_solidarites(tot, EF), EF),
+        ("fse", "Insertion – FSE", bloc_solidarites(tot, IDS_FSE, colonne="groupe_evolution"), IDS_FSE),
+        ("hors", "Insertion – hors FSE", bloc_solidarites(tot, IDS_HORS, colonne="groupe_evolution"), IDS_HORS),
+        ("auto", "Autonomie", bloc_solidarites(tot, AUTONOMIE), AUTONOMIE),
+    ]
+    boutons = "".join(
+        f'<button type="button" role="tab" id="onglet-{k}" aria-controls="panneau-{k}" '
+        f'aria-selected="{"true" if i == 0 else "false"}" tabindex="{0 if i == 0 else -1}">'
+        f'<span class="pastille" data-cle="{COULEUR_CLE[g]}"></span>{escape(lib)}</button>'
+        for i, (k, lib, _, g) in enumerate(onglets))
+    panneaux = "".join(
+        f'<div role="tabpanel" id="panneau-{k}" aria-labelledby="onglet-{k}" class="panneau">{bloc}</div>'
+        for k, _, bloc, _ in onglets)
+    solidarites_html = (f'<div class="onglets" data-onglets>'
+                        f'<div role="tablist" aria-label="Groupe des Solidarités humaines">{boutons}</div>'
+                        f'{panneaux}</div>')
 
     # Thème sombre : couleurs des séries et de l'habillage, appliquées par script
     theme_js = {m: dict(**THEME[m], series=couleurs(m)) for m in THEME}
@@ -853,6 +867,26 @@ footer a {{ color: inherit; }}
 .lien-depot:hover, .lien-depot:focus-visible {{ color: var(--ink); border-bottom-color: currentColor; }}
 .haut-depot {{ margin: 0 0 12px; }}
 .bas-depot {{ margin: 8px 0 0; }}
+.onglets [role="tablist"] {{ display: none; }}
+.onglets.actifs [role="tablist"] {{ display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border); margin: 8px 0 0; }}
+.onglets [role="tab"] {{ display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: .92rem;
+  color: var(--ink2); background: none; border: 0; border-bottom: 3px solid transparent;
+  padding: 8px 12px; margin-bottom: -1px; cursor: pointer; border-radius: 6px 6px 0 0; }}
+.onglets [role="tab"]:hover {{ color: var(--ink); background: var(--page); }}
+.onglets [role="tab"][aria-selected="true"] {{ color: var(--ink); font-weight: 650; border-bottom-color: var(--b0); }}
+.onglets [role="tab"]:focus-visible {{ outline: 2px solid var(--b0); outline-offset: 2px; }}
+.onglets.actifs .panneau[hidden] {{ display: none; }}
+.onglets.actifs .bloc-sol {{ margin-top: 12px; }}
+.onglets.actifs .bloc-sol h3 {{ display: none; }}
+@media print {{
+  .onglets [role="tablist"] {{ display: none !important; }}
+  .onglets .panneau[hidden] {{ display: block !important; }}
+  .onglets .bloc-sol h3 {{ display: flex !important; }}
+}}
+@media (max-width: 600px) {{
+  .onglets.actifs [role="tablist"] {{ display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }}
+  .onglets [role="tab"] {{ padding: 8px 6px; font-size: .85rem; gap: 6px; text-align: left; }}
+}}
 @media (max-width: 760px) {{
   .kpis {{ grid-template-columns: repeat(2, 1fr); }}
   .duo {{ grid-template-columns: 1fr; }}
@@ -915,7 +949,7 @@ footer a {{ color: inherit; }}
 
 <section class="card">
   <h2>Solidarités : principaux bénéficiaires, {a_min}–{a_max}</h2>
-  <p class="sous">Les 10 premiers bénéficiaires de chaque groupe des Solidarités humaines, par montant total ; le groupe Insertion est présenté en deux tableaux (FSE et hors FSE). Une structure qui reçoit les deux types de subventions apparaît dans les deux, avec le montant propre à chacun. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
+  <p class="sous">Les 10 premiers bénéficiaires de chaque groupe des Solidarités humaines, par montant total : choisissez le groupe avec les onglets. Le groupe Insertion est présenté en deux tableaux (FSE et hors FSE). Une structure qui reçoit les deux types de subventions apparaît dans les deux, avec le montant propre à chacun. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
   {solidarites_html}
 </section>
 {hors_fse_html}
@@ -964,6 +998,31 @@ footer a {{ color: inherit; }}
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", appliquer);
   new MutationObserver(appliquer).observe(document.documentElement, {{ attributes: true, attributeFilter: ["data-theme"] }});
 }})();
+</script>
+<script>
+document.querySelectorAll("[data-onglets]").forEach(function (box) {{
+  var tabs = Array.prototype.slice.call(box.querySelectorAll('[role="tab"]'));
+  function choisir(t, focus) {{
+    tabs.forEach(function (b) {{
+      var on = b === t;
+      b.setAttribute("aria-selected", on ? "true" : "false");
+      b.tabIndex = on ? 0 : -1;
+      document.getElementById(b.getAttribute("aria-controls")).hidden = !on;
+    }});
+    if (focus) t.focus();
+  }}
+  tabs.forEach(function (b, i) {{
+    b.addEventListener("click", function () {{ choisir(b); }});
+    b.addEventListener("keydown", function (e) {{
+      var j = {{ ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }}[e.key];
+      if (j === undefined) return;
+      e.preventDefault();
+      choisir(tabs[(j + tabs.length) % tabs.length], true);
+    }});
+  }});
+  box.classList.add("actifs");
+  choisir(tabs[0]);
+}});
 </script>
 <script>{JS_ECRAN_ETROIT}</script>
 </body>
