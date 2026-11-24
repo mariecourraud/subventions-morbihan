@@ -61,14 +61,14 @@ who receives it. Objects too generic to be classed with certainty are marked *No
 
 | Public policy | 2020 | 2021 | 2022 | 2023 | Total (€M) | Share |
 |---|--:|--:|--:|--:|--:|--:|
-| Solidarités humaines | 11.1 | 7.9 | 7.1 | 11.0 | 37.1 | 8.9% |
-| Solidarité des territoires | 26.1 | 41.8 | 53.7 | 35.7 | 157.3 | 37.7% |
+| Solidarités humaines | 14.9 | 11.6 | 10.8 | 14.6 | 51.9 | 12.5% |
+| Solidarité des territoires | 26.2 | 42.1 | 55.0 | 36.6 | 159.9 | 38.4% |
 | Infrastructures et mobilité | 3.6 | 6.2 | 6.6 | 8.0 | 24.3 | 5.8% |
 | Environnement | 4.6 | 5.6 | 6.2 | 7.0 | 23.5 | 5.6% |
 | Éducation | 20.3 | 22.5 | 21.5 | 21.9 | 86.2 | 20.7% |
 | Attractivité et animation territoriales | 10.3 | 11.1 | 15.4 | 11.2 | 48.0 | 11.5% |
 | Ressources | 0.3 | 0.3 | 0.4 | 0.1 | 1.1 | 0.3% |
-| *Non ventilé* | 5.8 | 13.1 | 10.9 | 9.8 | 39.6 | 9.5% |
+| *Non ventilé* | 1.8 | 9.0 | 5.9 | 5.3 | 22.0 | 5.3% |
 | **Total** | **82.0** | **108.4** | **121.8** | **104.8** | **417.0** | **100%** |
 
 ## Data quality issues found
@@ -100,8 +100,12 @@ who receives it. Objects too generic to be classed with certainty are marked *No
   instead of guessing.
 - **Categories:** each of the 131 grant objects has a public policy, a sector policy, a
   justification and a confidence level in `ref/objets_politiques.csv` (89 high, 26 medium,
-  16 low = the 16 unallocated objects). I reviewed and validated the 17 medium- and
-  low-confidence objects above €500k (€73.4 M).
+  9 manual, 7 low = the 7 objects still unallocated). I reviewed and validated the 17 medium-
+  and low-confidence objects above €500k (€73.4 M).
+- **Manual reclassification:** I reclassified by hand 9 objects that had been left *Non ventilé*,
+  based on my knowledge of the Department's reports (marked `manuel` in the confidence column).
+  They cover 664 grants and €17.6 M. The unallocated share falls from 9.5% (€39.6 M) to 5.3%
+  (€22.0 M).
 
 ## Use of AI
 
@@ -116,10 +120,12 @@ who receives it. Objects too generic to be classed with certainty are marked *No
 - The open dataset stops at 2023.
 - The grid is the one in force on 1 January 2025, applied retroactively to grants voted in
   2020–2023.
-- Categories are assigned per grant object, not per grant: 16 generic objects (895 grants,
-  €39.6 M, 9.5% of the total) stay *Non ventilé*, led by "Rapports spéciaux" (€18.7 M) and
-  "Actions appel à projet" (€11.9 M). Splitting them would need a grant-by-grant review.
-- The 25 medium- and low-confidence objects below €500k (€2.7 M) were not reviewed individually.
+- Categories are assigned per grant object, not per grant: 7 generic objects (231 grants,
+  €22.0 M, 5.3% of the total) stay *Non ventilé*, led by "Rapports spéciaux" (€18.7 M).
+  Splitting them would need a grant-by-grant review.
+- The 9 manual reclassifications rest on my reading of the Department's reports, not on the
+  grant object alone.
+- The 20 medium- and low-confidence objects below €500k (€2.3 M) were not reviewed individually.
 - Five sector policies have no grant in the data (Aménagement numérique, Expertises et analyses
   en environnement, Moyens des services, Gestion et fonctionnement de l'assemblée, Ressources
   financières).

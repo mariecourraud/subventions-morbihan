@@ -1,11 +1,11 @@
 ﻿objet;politique_publique;politique_sectorielle;justification;confiance
-AMI mobilité;Non ventilé;Non ventilé;Appel à manifestation d'intérêt « mobilité » : l'objet ne dit pas s'il s'agit de mobilité des publics en insertion ou d'aménagement;basse
-Actions Diverses (Fonctionnement);Non ventilé;Non ventilé;Intitulé générique sans domaine;basse
-Actions appel à projet;Non ventilé;Non ventilé;Intitulé générique : l'appel à projet n'est pas nommé;basse
+AMI mobilité;ÉDUCATION;Jeunesse et partenariats éducatifs (dont plan jeunesse, enseignement supérieur, université tous les âges);Reclassé manuellement d'après les rapports du Département (ancienne justification : Appel à manifestation d'intérêt « mobilité » : l'objet ne dit pas s'il s'agit de mobilité des publics en insertion ou d'aménagement);manuel
+Actions Diverses (Fonctionnement);SOLIDARITÉS HUMAINES;Enfance et famille;Reclassé manuellement d'après les rapports du Département (ancienne justification : Intitulé générique sans domaine);manuel
+Actions appel à projet;SOLIDARITÉS HUMAINES;Enfance et famille;Reclassé manuellement d'après les rapports du Département (ancienne justification : Intitulé générique : l'appel à projet n'est pas nommé);manuel
 Actions collectives favorisant le lien social;SOLIDARITÉS HUMAINES;Insertion et développement social;Lien social : développement social;moyenne
-Actions hors appel à projet;Non ventilé;Non ventilé;Intitulé générique sans domaine;basse
+Actions hors appel à projet;SOLIDARITÉS HUMAINES;Enfance et famille;Reclassé manuellement d'après les rapports du Département (ancienne justification : Intitulé générique sans domaine);manuel
 Actions spécifiques territoriales;SOLIDARITÉ DES TERRITOIRES;Accompagnement des territoires (dont aides aux territoires, animation locale);Actions territoriales : accompagnement des territoires, mais intitulé vague;moyenne
-Activités de prévention;Non ventilé;Non ventilé;« Prévention » sans précision : pourrait être la perte d'autonomie, la santé ou l'enfance;basse
+Activités de prévention;SOLIDARITÉS HUMAINES;Enfance et famille;Reclassé manuellement d'après les rapports du Département (ancienne justification : « Prévention » sans précision : pourrait être la perte d'autonomie, la santé ou l'enfance);manuel
 Aide au sport scolaire - Privé;ÉDUCATION;Collèges;Sport scolaire dans les collèges privés (pourrait relever des Sports);moyenne
 Aide au sport scolaire - Public;ÉDUCATION;Collèges;Sport scolaire dans les collèges publics (pourrait relever des Sports);moyenne
 Aide aux travaux en faveur du maintien à domicile des personnes handicapées;SOLIDARITÉS HUMAINES;Personnes handicapées;Maintien à domicile des personnes handicapées (pourrait relever de l'Habitat);moyenne
@@ -23,7 +23,7 @@ Aides aux organismes du tourisme;ATTRACTIVITÉ ET ANIMATION TERRITORIALES;Touris
 Aides en faveur de la forêt;ENVIRONNEMENT;Espaces naturels et activités de nature (dont ENS, randonnées, bocage et forêts);Forêts (explicitement dans la grille);haute
 Aménagement foncier - Travaux connexes;SOLIDARITÉ DES TERRITOIRES;Aménagement foncier rural;Aménagement foncier;haute
 Association à caractère éducatif;ÉDUCATION;Jeunesse et partenariats éducatifs (dont plan jeunesse, enseignement supérieur, université tous les âges);Partenariats éducatifs avec des associations;moyenne
-Associations relais;Non ventilé;Non ventilé;« Associations relais » sans domaine précisé;basse
+Associations relais;SOLIDARITÉS HUMAINES;Insertion et développement social;Reclassé manuellement d'après les rapports du Département (ancienne justification : « Associations relais » sans domaine précisé);manuel
 Associations sportives;ATTRACTIVITÉ ET ANIMATION TERRITORIALES;Sports;Sports;haute
 Associations tourisme - Fonctionnement;ATTRACTIVITÉ ET ANIMATION TERRITORIALES;Tourisme;Tourisme;haute
 Associations tourisme - SPT (Fonctionnement);ATTRACTIVITÉ ET ANIMATION TERRITORIALES;Tourisme;Tourisme;haute
@@ -81,7 +81,7 @@ Itinéraires cyclables;INFRASTRUCTURES ET MOBILITÉ;Aménagements cyclables;Amé
 LGV Bretagne;INFRASTRUCTURES ET MOBILITÉ;Développement ferroviaire;Ligne ferroviaire;haute
 Logement locatif social;SOLIDARITÉ DES TERRITOIRES;Habitat;Logement social;haute
 Lutte contre les pollutions diffuses;ENVIRONNEMENT;Eau;Qualité de l'eau;haute
-Manifestations de sensibilisations;Non ventilé;Non ventilé;Thème de sensibilisation non précisé;basse
+Manifestations de sensibilisations;SOLIDARITÉS HUMAINES;Enfance et famille;Reclassé manuellement d'après les rapports du Département (ancienne justification : Thème de sensibilisation non précisé);manuel
 Manifestations sportives;ATTRACTIVITÉ ET ANIMATION TERRITORIALES;Sports;Sports;haute
 Milieux aquatiques et inondations;ENVIRONNEMENT;Eau;Milieux aquatiques (les inondations pourraient relever de la prévention des risques);haute
 Mise en accessibilité des bâtiments et des lieux publics;SOLIDARITÉ DES TERRITOIRES;Accompagnement des territoires (dont aides aux territoires, animation locale);Travaux d'accessibilité aidés dans les territoires (lien avec le handicap);moyenne
@@ -128,5 +128,5 @@ Valorisation du patrimoine - actions;ATTRACTIVITÉ ET ANIMATION TERRITORIALES;Cu
 Valorisation du patrimoine - équipements;ATTRACTIVITÉ ET ANIMATION TERRITORIALES;Culture;Patrimoine;haute
 Voirie communale dans les îles;SOLIDARITÉ DES TERRITOIRES;Accompagnement des territoires (dont aides aux territoires, animation locale);Voirie communale : aides aux territoires;haute
 Voirie, aménagement des centre-bourgs et transition énergétique;SOLIDARITÉ DES TERRITOIRES;Accompagnement des territoires (dont aides aux territoires, animation locale);Aides aux territoires (voirie et centres-bourgs);haute
-Équipements sportifs, socio-éducatifs et culturels des associations;Non ventilé;Non ventilé;L'objet couvre plusieurs domaines (sport, socio-éducatif, culture);basse
-Équipements sportifs, socio-éducatifs, sanitaires, sociaux et culturels des associations;Non ventilé;Non ventilé;L'objet couvre plusieurs domaines (sport, sanitaire, social, culture);basse
+Équipements sportifs, socio-éducatifs et culturels des associations;SOLIDARITÉ DES TERRITOIRES;Accompagnement des territoires (dont aides aux territoires, animation locale);Reclassé manuellement d'après les rapports du Département (ancienne justification : L'objet couvre plusieurs domaines (sport, socio-éducatif, culture));manuel
+Équipements sportifs, socio-éducatifs, sanitaires, sociaux et culturels des associations;SOLIDARITÉ DES TERRITOIRES;Accompagnement des territoires (dont aides aux territoires, animation locale);Reclassé manuellement d'après les rapports du Département (ancienne justification : L'objet couvre plusieurs domaines (sport, sanitaire, social, culture));manuel

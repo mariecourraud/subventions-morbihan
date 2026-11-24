@@ -191,7 +191,10 @@ def main() -> None:
     zeros = int((~df["inclus_totaux"]).sum())
     fus = df["idBeneficiaire"] != df["idBeneficiaire_original"]
     nv = tot.loc[tot["politique_publique"] == NON_VENTILE, "montant"].sum()
-    nv_objets = tot.loc[tot["politique_publique"] == NON_VENTILE, "objet"].nunique()
+    nv_par_objet = (tot.loc[tot["politique_publique"] == NON_VENTILE]
+                    .groupby("objet")["montant"].sum().sort_values(ascending=False))
+    nv_objets = len(nv_par_objet)
+    nv_exemples = ", ".join(f"« {escape(o)} »" for o in nv_par_objet.index[:2])
     nb_objets = tot["objet"].nunique()
 
     figs = {
@@ -340,7 +343,7 @@ footer a {{ color: inherit; }}
   <ul>
     <li><b>Montants à 0 € exclus :</b> {zeros} subventions à 0 € sont retirées des totaux et des comptages.</li>
     <li><b>Fusions d'identifiants :</b> {int(fus.sum())} subventions ont été rattachées à un autre identifiant ({df.loc[fus, 'idBeneficiaire_original'].nunique()} identifiants fusionnés), après vérification au cas par cas des organismes enregistrés sous plusieurs identifiants.</li>
-    <li><b>« Non ventilé » :</b> {meur(nv)}, soit {fr(nv / montant * 100)} % du total ({nv_objets} objets sur {nb_objets}). L'intitulé de ces subventions est trop générique pour les rattacher à une politique sans deviner (ex. « Rapports spéciaux », « Actions appel à projet »).</li>
+    <li><b>« Non ventilé » :</b> {meur(nv)}, soit {fr(nv / montant * 100)} % du total ({nv_objets} objets sur {nb_objets}). L'intitulé de ces subventions est trop générique pour les rattacher à une politique sans deviner (principalement {nv_exemples}).</li>
     <li><b>Grille appliquée après coup :</b> la segmentation stratégique en vigueur au 1<sup>er</sup> janvier 2025 est appliquée rétroactivement aux subventions votées de {a_min} à {a_max}, d'après l'objet de chaque subvention.</li>
     <li><b>Type de bénéficiaire :</b> déduit du nom ; {meur(tot.loc[tot['type_beneficiaire'] == 'Autre', 'montant'].sum())} restent en « Autre » faute d'indice dans le nom.</li>
   </ul>
