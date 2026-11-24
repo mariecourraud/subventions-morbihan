@@ -808,6 +808,8 @@ body {{ margin: 0; background: var(--page); color: var(--ink); font-family: {FON
 main {{ max-width: 1120px; margin: 0 auto; padding: 32px 16px 48px; }}
 header h1 {{ font-size: 1.75rem; margin: 0 0 4px; font-weight: 650; }}
 header p {{ margin: 0; color: var(--ink2); }}
+.citation {{ margin: 20px 0 0; padding: 4px 0 4px 16px; border-left: 3px solid var(--b0); max-width: 760px; }}
+.citation p {{ font-style: italic; color: var(--ink); font-size: 1.02rem; }}
 .kpis {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0; }}
 .kpi, .card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }}
 .kpi {{ padding: 16px 20px; }}
@@ -862,7 +864,8 @@ footer a {{ color: inherit; }}
 <header>
   <p class="haut-depot"><a class="lien-depot" href="{DEPOT_URL}">{LIEN_DEPOT}</a></p>
   <h1>Subventions du Département du Morbihan, {a_min}–{a_max}</h1>
-  <p>Subventions aux personnes morales, ventilées selon la segmentation stratégique du Département au 1<sup>er</sup> janvier 2025.</p>
+  <p>Subventions aux personnes morales, ventilées selon la segmentation stratégique du Département au 1<sup>er</sup> janvier 2025. Document provisoire, susceptible d'évoluer : les chiffres présentés ne constituent pas une donnée officielle.</p>
+  <blockquote class="citation"><p>Une politique publique ne peut se mesurer à sa seule enveloppe budgétaire. Elle vaut aussi par la qualité du travail de celles et ceux qui la mettent en œuvre, déterminée par les conditions dans lesquelles ils exercent leur métier.</p></blockquote>
 </header>
 
 <section class="kpis" aria-label="Chiffres clés">{kpi_html}</section>
