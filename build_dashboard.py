@@ -550,8 +550,12 @@ SYMBOLE_PLURI = "◆"
 GAMME_INSERTION = [[0, "#F7A1B3"], [0.35, "#E3356A"], [0.7, "#9D174D"], [1, "#6B0F3C"]]
 
 
-def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame, n: int = 40) -> tuple[go.Figure, str]:
-    """Carte de chaleur des n premiers bénéficiaires d'« Insertion – hors FSE », par année + Total."""
+PAR_PAGE = 20  # lignes visibles à la fois dans la carte de chaleur (défilement continu au-delà)
+
+
+def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame) -> tuple[go.Figure, str]:
+    """Carte de chaleur de tous les bénéficiaires nommés d'« Insertion – hors FSE », par année + Total,
+    classés par montant total ; PAR_PAGE lignes visibles, le reste en faisant défiler."""
     import numpy as np
     from renouvellement import couples, lignes_sh  # import ici : renouvellement importe ce module
 
@@ -565,7 +569,7 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame, n: int = 40) -> tuple[go
     p["Total"] = p.sum(axis=1)
     p = p.sort_values("Total", ascending=False)
     nb_benef, total_groupe = len(p), p["Total"].sum()
-    p = p.head(n)
+    visibles = min(PAR_PAGE, nb_benef)
 
     # Type et « pluriannuel probable » (calculé, dans renouvellement.py, sur le groupe Insertion hors FSE)
     types = nommes.groupby("idBeneficiaire")["type_beneficiaire"].first()
@@ -608,40 +612,51 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame, n: int = 40) -> tuple[go
                     customdata=survol, hovertemplate="%{customdata}<extra></extra>", row=1, col=1)
     fig.add_heatmap(z=lg(val), x=x_an, y=etiquettes, colorscale=GAMME_INSERTION, zmin=zmin, zmax=zmax,
                     xgap=2, ygap=2, customdata=survol, hovertemplate="%{customdata}<extra></extra>",
-                    colorbar=dict(title=dict(text="Montant de l'année (échelle log)", side="top"),
+                    colorbar=dict(title=dict(text="Montant annuel (échelle log)", side="top", font=dict(size=12)),
                                   orientation="h", x=0.4, xanchor="center", y=-0.01, yanchor="top",
                                   len=0.6, thickness=10, tickvals=ticks,
                                   ticktext=[etiq_ticks[t] for t in ticks], outlinewidth=0),
                     row=1, col=1)
-    # Colonne Total, séparée, sur sa propre échelle, avec le montant écrit dans la case
+    # Colonne Total, séparée, sur sa propre échelle, avec le montant écrit dans la case.
+    # À FAIRE : recalculer cette colonne en moyenne annuelle (au lieu du total de la période).
     fig.add_heatmap(z=lg(tot_col), x=["Total"], y=etiquettes, colorscale=GAMME_INSERTION, showscale=False,
                     xgap=2, ygap=2, text=[[f"{fr(t / 1e3, 0)} k€"] for t in tot_col[:, 0]],
                     texttemplate="%{text}", textfont=dict(size=11),
                     customdata=survol_tot, hovertemplate="%{customdata}<extra></extra>", row=1, col=2)
     marge_g = 330
-    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11, color=L["ink2"]), showgrid=False,
-                     automargin=False)
+    # Axe inversé (1er en haut), limité aux PAR_PAGE premières lignes ; le défilement déplace cette fenêtre
+    fig.update_yaxes(autorange=False, range=[visibles - 0.5, -0.5], fixedrange=True,
+                     tickfont=dict(size=11, color=L["ink2"]), showgrid=False, automargin=False)
     fig.update_yaxes(showticklabels=False, row=1, col=2)
     fig.update_xaxes(type="category", side="top", showgrid=False, showline=False,
                      tickfont=dict(color=L["ink2"]))
     # Colonne « type » : annotations calées sur le bord gauche de la figure (décalage en pixels)
-    fig.add_annotation(x=0, y=-0.5, xref="paper", yref="y", text="<b>Type</b>", showarrow=False,
-                       xanchor="left", xshift=-marge_g + 8, yshift=14, font=dict(size=11, color=L["ink2"]))
+    # En-tête « Type » calé sur le haut du graphique (reste visible quelle que soit la tranche affichée)
+    fig.add_annotation(x=0, y=1, xref="paper", yref="paper", text="<b>Type</b>", showarrow=False,
+                       xanchor="left", yanchor="bottom", xshift=-marge_g + 8, yshift=4,
+                       font=dict(size=11, color=L["ink2"]))
     for e, i in zip(etiquettes, ids):
         fig.add_annotation(x=0, y=e, xref="paper", yref="y", text=TYPE_COURT.get(types[i], types[i]),
                            showarrow=False, xanchor="left", xshift=-marge_g + 8,
                            font=dict(size=11, color=L["muted"]))
-    fig = mise_en_page(fig, 24 * len(p) + 160)
+    fig = mise_en_page(fig, 24 * visibles + 160)
     fig.update_layout(margin=dict(l=marge_g, t=40, b=80))
 
+    # Défilement continu : PAR_PAGE lignes visibles, molette / glisser / flèches pour faire défiler
+    defilement = (f'<div class="defil" data-carte="fig-hors_fse" data-visibles="{visibles}" data-total="{nb_benef}">'
+                  f'<button type="button" data-pas="-1" aria-label="Faire défiler vers le haut">▲</button>'
+                  f'<button type="button" data-pas="1" aria-label="Faire défiler vers le bas">▼</button>'
+                  f'<span class="defil-pos" aria-live="polite">Lignes 1 à {visibles} sur {nb_benef}</span>'
+                  f'<span class="defil-aide">molette ou glisser sur le graphique</span></div>')
     note_excl = ("Exclus : les tiers anonymisés"
                  + (f" ({int(anon.sum())} subventions, {euros(s.loc[anon, 'montant'].sum())})" if anon.any()
                     else " (aucun dans ce sous-groupe)")
                  + f" et les montants à 0 € ({zeros} subvention{'s' if zeros > 1 else ''}).")
     html = f"""
 <section class="card" id="hors-fse">
-  <h2>Insertion – hors FSE : les {len(p)} premiers bénéficiaires par année, {annees[0]}–{annees[-1]}</h2>
-  <p class="sous">Subventions du groupe Insertion et développement social dont l'objet n'est pas « {OBJET_FSE} ». Couleur : montant de l'année, du clair (faible) au foncé (élevé), sur une échelle logarithmique ; case grise = aucune subvention cette année-là. Colonne Total sur sa propre échelle. {SYMBOLE_PLURI} = pluriannuel probable. Ces {len(p)} bénéficiaires représentent {fr(p['Total'].sum() / total_groupe * 100)} % des {meur(total_groupe)} du sous-groupe ({nb_benef} bénéficiaires nommés).</p>
+  <h2>Insertion – hors FSE : bénéficiaires par année, {annees[0]}–{annees[-1]}</h2>
+  <p class="sous">Subventions du groupe Insertion et développement social dont l'objet n'est pas « {OBJET_FSE} » : les {nb_benef} bénéficiaires nommés ({meur(total_groupe)}), classés du plus gros au plus petit montant total ; {PAR_PAGE} lignes visibles, faites défiler pour voir les autres. Couleur : montant de l'année, du clair (faible) au foncé (élevé), sur une échelle logarithmique ; case grise = aucune subvention cette année-là. Colonne Total sur sa propre échelle. {SYMBOLE_PLURI} = pluriannuel probable.</p>
+  {defilement}
   {{div_hors_fse}}
   <p class="note">Les montants sont enregistrés l'année de la décision : une convention pluriannuelle apparaît en une seule fois, suivie d'années sans montant, sans que le financement ait cessé.</p>
   <p class="note">{escape(note_excl)} {SYMBOLE_PLURI} Pluriannuel probable : financé une année sur deux ou sur trois, ou une année à plus de 2 fois son montant médian. Noms raccourcis : nom complet au survol.</p>
@@ -924,6 +939,17 @@ section[id] {{ scroll-margin-top: 76px; }}
 .sommaire a:focus-visible {{ outline: 2px solid {GRIS_ACCENT}; outline-offset: 2px; }}
 @media print {{ .sommaire {{ display: none; }} }}
 
+/* Défilement de la carte de chaleur */
+.defil {{ display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; font-size: .86rem; color: var(--ink2); }}
+.defil button {{ flex: none; font: inherit; font-size: .8rem; line-height: 1; width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink); cursor: pointer; touch-action: manipulation; }}
+.defil button:hover:not(:disabled) {{ background: var(--band1); }}
+.defil button:disabled {{ opacity: .35; cursor: default; }}
+.defil button:focus-visible {{ outline: 2px solid var(--ink); outline-offset: 2px; }}
+.defil-pos {{ font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }}
+.defil-aide {{ color: var(--muted); font-size: .8rem; }}
+
+
 /* Cartes */
 .card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--ombre);
   padding: 22px 24px 14px; margin-bottom: 18px; }}
@@ -1145,6 +1171,54 @@ footer a {{ color: inherit; }}
     a.addEventListener("click", function () {{ pause = Date.now() + 1200; marquer(a.getAttribute("href").slice(1)); }});
   }});
 }})();
+</script>
+<script>
+// Carte de chaleur : fenêtre de N lignes qui défile en continu (molette, glisser, flèches)
+document.querySelectorAll(".defil").forEach(function (box) {{
+  var gd = document.getElementById(box.dataset.carte);
+  var n = +box.dataset.visibles, total = +box.dataset.total, max = Math.max(0, total - n);
+  var haut = box.querySelector('[data-pas="-1"]'), bas = box.querySelector('[data-pas="1"]');
+  var pos = box.querySelector(".defil-pos"), o = 0, prevu = false;
+  function dessiner() {{
+    prevu = false;
+    Plotly.relayout(gd, {{ "yaxis.range": [o + n - 0.5, o - 0.5] }});
+    var d = Math.round(o);
+    pos.textContent = "Lignes " + (d + 1) + " à " + Math.min(d + n, total) + " sur " + total;
+    haut.disabled = o <= 0; bas.disabled = o >= max;
+  }}
+  // Renvoie vrai si la fenêtre a bougé (sinon la page défile normalement)
+  function deplacer(lignes) {{
+    var avant = o;
+    o = Math.max(0, Math.min(max, o + lignes));
+    if (o !== avant && !prevu) {{ prevu = true; requestAnimationFrame(dessiner); }}
+    return o !== avant;
+  }}
+  gd.addEventListener("wheel", function (e) {{
+    var lignes = e.deltaMode === 1 ? e.deltaY : e.deltaY / 24;
+    if (deplacer(lignes)) e.preventDefault();
+  }}, {{ passive: false }});
+  var y0 = null;
+  gd.addEventListener("touchstart", function (e) {{ y0 = e.touches[0].clientY; }}, {{ passive: true }});
+  gd.addEventListener("touchmove", function (e) {{
+    if (y0 === null) return;
+    var y = e.touches[0].clientY;
+    if (deplacer((y0 - y) / 24)) e.preventDefault();
+    y0 = y;
+  }}, {{ passive: false }});
+  gd.addEventListener("touchend", function () {{ y0 = null; }});
+  // Flèches : une ligne par clic, défilement continu si on garde le bouton enfoncé
+  [haut, bas].forEach(function (b) {{
+    var minuteur = null, delai = null, pas = +b.dataset.pas;
+    function arreter() {{ clearTimeout(delai); clearInterval(minuteur); delai = minuteur = null; }}
+    b.addEventListener("pointerdown", function (e) {{
+      e.preventDefault(); deplacer(pas);
+      delai = setTimeout(function () {{ minuteur = setInterval(function () {{ if (!deplacer(pas * 0.5)) arreter(); }}, 40); }}, 350);
+    }});
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (t) {{ b.addEventListener(t, arreter); }});
+    b.addEventListener("keydown", function (e) {{ if (e.key === "Enter" || e.key === " ") {{ e.preventDefault(); deplacer(pas); }} }});
+  }});
+  haut.disabled = true; bas.disabled = max === 0;
+}});
 </script>
 <script>
 document.querySelectorAll("[data-onglets]").forEach(function (box) {{
