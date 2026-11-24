@@ -53,6 +53,24 @@ BLEUS = {"light": ["#104281", "#2a78d6", "#86b6ef"], "dark": ["#184f95", "#3987e
 COULEUR_CLE = ({EF: "b0", IDS: "b1", AUTONOMIE: "b2"}
                | {p: f"s{i + 1}" for i, p in enumerate(AUTRES)} | {NON_VENTILE: "nv"})
 
+# Insertion découpée, subvention par subvention selon l'objet, en deux sous-groupes.
+# Utilisé uniquement dans le graphique d'évolution et les tableaux de bénéficiaires ;
+# politique_affichage (et donc l'analyse du renouvellement) garde les trois groupes.
+OBJET_FSE = "Subventions FSE"
+IDS_FSE = "Insertion – fonds européens (FSE)"
+IDS_HORS = "Insertion – hors FSE"
+GROUPES_EVOL = [EF, IDS_FSE, IDS_HORS, AUTONOMIE, *AUTRES, NON_VENTILE]
+COULEUR_CLE |= {IDS_FSE: "b1", IDS_HORS: "b1"}  # même bleu que le groupe Insertion
+
+
+def groupe_evolution(df: pd.DataFrame) -> pd.Series:
+    """politique_affichage, avec Insertion séparée en FSE / hors FSE selon l'objet."""
+    ins = df["politique_affichage"] == IDS
+    fse = df["objet"] == OBJET_FSE
+    if (fse & ~ins).any():
+        raise ValueError(f"Des subventions « {OBJET_FSE} » sont hors du groupe Insertion")
+    return df["politique_affichage"].mask(ins & fse, IDS_FSE).mask(ins & ~fse, IDS_HORS)
+
 
 def couleurs(mode: str) -> dict:
     c = {f"s{i}": h for i, h in enumerate(SERIES[mode])}
@@ -140,7 +158,7 @@ def fig_empile(t: pd.DataFrame) -> go.Figure:
 def fig_multiples(t: pd.DataFrame) -> go.Figure:
     """Un petit graphique par politique publique, chacun avec sa propre échelle."""
     c = couleurs("light")
-    pols = [p for p in GROUPES if p in t.index]
+    pols = [p for p in GROUPES_EVOL if p in t.index]
     ncol = 4
     nrow = -(-len(pols) // ncol)
     def titre(p: str, largeur: int = 26) -> str:
@@ -314,11 +332,12 @@ def euros(x: float) -> str:
     return f"{fr(x, 0)} €"
 
 
-def bloc_solidarites(tot: pd.DataFrame, groupe: str, n: int = 10) -> str:
-    """Tableau des n premiers bénéficiaires d'un groupe Solidarités.
-    Un bénéficiaire = un identifiant (après fusion) sous son nom d'affichage.
+def bloc_solidarites(tot: pd.DataFrame, groupe: str, n: int = 10, colonne: str = "politique_affichage") -> str:
+    """Tableau des n premiers bénéficiaires d'un groupe (ou sous-groupe) Solidarités.
+    Un bénéficiaire = un identifiant (après fusion) sous son nom d'affichage ; ses montants
+    sont ceux du (sous-)groupe seulement.
     Les « Tiers anonymisé » sont exclus (ils ne forment pas un bénéficiaire unique) et signalés."""
-    s = tot[tot["politique_affichage"] == groupe]
+    s = tot[tot[colonne] == groupe]
     anon = s["nom_affichage"] == ANONYME
     nommes = s[~anon]
     cle = ["idBeneficiaire", "nom_affichage"]
@@ -358,6 +377,7 @@ def main() -> None:
     df = pd.read_csv(SOURCE, sep=";", encoding="utf-8-sig",
                      dtype={"idBeneficiaire": str, "idBeneficiaire_original": str, "id": str})
     df["politique_affichage"] = politique_affichage(df)
+    df["groupe_evolution"] = groupe_evolution(df)
     tot = df[df["inclus_totaux"]]
 
     # Chiffres clés
@@ -370,6 +390,10 @@ def main() -> None:
     t = tot.pivot_table(index="politique_affichage", columns="annee", values="montant",
                         aggfunc="sum", fill_value=0)
     t = t.loc[[p for p in GROUPES if p in t.index]]
+    t_evol = tot.pivot_table(index="groupe_evolution", columns="annee", values="montant",
+                             aggfunc="sum", fill_value=0)
+    t_evol = t_evol.loc[[p for p in GROUPES_EVOL if p in t_evol.index]]
+    assert abs(t_evol.values.sum() - t.values.sum()) < 0.01
 
     types = (tot.groupby("type_beneficiaire")
              .agg(montant=("montant", "sum"), subventions=("id", "size"),
@@ -396,7 +420,7 @@ def main() -> None:
 
     figs = {
         "empile": fig_empile(t),
-        "multiples": fig_multiples(t),
+        "multiples": fig_multiples(t_evol),
         "types": fig_barres_h(
             types.index.tolist(), types["montant"],
             [f"{fr(r.subventions, 0)} subventions · {fr(r.beneficiaires, 0)} bénéficiaires"
@@ -438,7 +462,10 @@ def main() -> None:
         "Subventions": [fr(x, 0) for x in top["subventions"]],
     })
 
-    solidarites_html = "".join(bloc_solidarites(tot, g) for g in (EF, IDS, AUTONOMIE))
+    solidarites_html = (bloc_solidarites(tot, EF)
+                        + bloc_solidarites(tot, IDS_FSE, colonne="groupe_evolution")
+                        + bloc_solidarites(tot, IDS_HORS, colonne="groupe_evolution")
+                        + bloc_solidarites(tot, AUTONOMIE))
 
     # Thème sombre : couleurs des séries et de l'habillage, appliquées par script
     theme_js = {m: dict(**THEME[m], series=couleurs(m)) for m in THEME}
@@ -550,8 +577,9 @@ footer a {{ color: inherit; }}
 
 <section class="card">
   <h2>Évolution de chaque politique publique, {a_min}–{a_max}</h2>
-  <p class="sous">En millions d'euros. Attention : chaque graphique a sa propre échelle, pour rendre lisibles les petites politiques ; comparez les montants, pas les hauteurs.</p>
+  <p class="sous">En millions d'euros. Attention : chaque graphique a sa propre échelle, pour rendre lisibles les petites politiques ; comparez les montants, pas les hauteurs. Le groupe Insertion est séparé en deux selon l'objet de chaque subvention : fonds européens (FSE) et hors FSE.</p>
   {div['multiples']}
+  <p class="note">Les subventions FSE (Fonds social européen) sont des fonds européens gérés par le Département : elles ne relèvent pas uniquement de crédits départementaux propres.</p>
 </section>
 
 <div class="duo">
@@ -584,7 +612,7 @@ footer a {{ color: inherit; }}
 
 <section class="card">
   <h2>Solidarités : principaux bénéficiaires, {a_min}–{a_max}</h2>
-  <p class="sous">Les 10 premiers bénéficiaires de chacun des trois groupes des Solidarités humaines, par montant total. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
+  <p class="sous">Les 10 premiers bénéficiaires de chaque groupe des Solidarités humaines, par montant total ; le groupe Insertion est présenté en deux tableaux (FSE et hors FSE). Une structure qui reçoit les deux types de subventions apparaît dans les deux, avec le montant propre à chacun. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
   {solidarites_html}
 </section>
 {renouv_html}

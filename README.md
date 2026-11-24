@@ -64,6 +64,12 @@ For display only, the dashboard splits *Solidarités humaines* into three groups
 `politique_sectorielle` columns are unchanged. In the solidarity tables, anonymised beneficiaries
 are left out (and counted in a note) rather than summed as if they were one organisation.
 
+Within *Insertion et développement social*, the evolution chart and the beneficiary tables also
+separate, grant by grant, *Insertion – fonds européens (FSE)* (object exactly "Subventions FSE")
+from *Insertion – hors FSE*. FSE grants are European funds managed by the Department, not only the
+Department's own credits. A structure receiving both appears in both tables with the amount of
+each. The renewal analysis keeps the three solidarity groups.
+
 Requires Python 3, pandas and plotly. To rebuild everything from the raw file:
 
 ```
