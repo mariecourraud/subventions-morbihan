@@ -57,6 +57,7 @@ COULEUR_CLE = ({EF: "b0", IDS: "b1", AUTONOMIE: "b2"}
 # Utilisé uniquement dans le graphique d'évolution et les tableaux de bénéficiaires ;
 # politique_affichage (et donc l'analyse du renouvellement) garde les trois groupes.
 OBJET_FSE = "Subventions FSE"
+MORBIHAN_HABITAT = "MORBIHAN HABITAT"  # retiré d'Autonomie dans une courbe de comparaison
 IDS_FSE = "Insertion – fonds européens (FSE)"
 IDS_HORS = "Insertion – hors FSE"
 GROUPES_EVOL = [EF, IDS_FSE, IDS_HORS, AUTONOMIE, *AUTRES, NON_VENTILE]
@@ -155,7 +156,7 @@ def fig_empile(t: pd.DataFrame) -> go.Figure:
     return mise_en_page(fig, 480)
 
 
-def fig_multiples(t: pd.DataFrame) -> go.Figure:
+def fig_multiples(t: pd.DataFrame, comparaisons: dict | None = None) -> go.Figure:
     """Un petit graphique par politique publique, chacun avec sa propre échelle."""
     c = couleurs("light")
     pols = [p for p in GROUPES_EVOL if p in t.index]
@@ -174,6 +175,28 @@ def fig_multiples(t: pd.DataFrame) -> go.Figure:
     for i, p in enumerate(pols):
         r, col = i // ncol + 1, i % ncol + 1
         v = t.loc[p] / 1e6
+        if comparaisons and p in comparaisons:
+            # Courbe de comparaison en gris, tracée SOUS la courbe principale : elle n'apparaît
+            # que là où les deux diffèrent ; étiquette courte au premier écart.
+            nom, court_nom, w = comparaisons[p]
+            w = w.reindex(t.columns, fill_value=0) / 1e6
+            ecart = [k for k, (a, b) in enumerate(zip(v, w)) if abs(a - b) > 0.005]
+            if ecart:
+                # Annotation dans la zone vide sous les courbes, flèche vers le premier écart.
+                # x = rang de la catégorie (une étiquette « 2020 » serait lue comme l'indice 2020).
+                k = ecart[0]
+                fig.add_annotation(x=k, y=w.iloc[k], text=f"{fr(w.iloc[k])} {court_nom}",
+                                   showarrow=True, arrowhead=0, arrowwidth=1, arrowcolor=L["muted"],
+                                   ax=34, ay=48, xanchor="left", font=dict(size=11, color=L["ink2"]),
+                                   row=r, col=col)
+            fig.add_scatter(
+                x=annees, y=w, mode="lines+markers", meta="nv", showlegend=False,
+                line=dict(color=c["nv"], width=2),
+                marker=dict(size=8, color=c["nv"], line=dict(color=L["surface"], width=2)),
+                customdata=[meur(x * 1e6) for x in w],
+                hovertemplate="%{x}<br><b>%{customdata}</b><extra>" + escape(f"{libelle(p)} {nom}") + "</extra>",
+                row=r, col=col,
+            )
         fig.add_scatter(
             x=annees, y=v, mode="lines+markers+text", meta=COULEUR_CLE[p], showlegend=False,
             line=dict(color=c[COULEUR_CLE[p]], width=2),
@@ -414,6 +437,21 @@ def main() -> None:
     t_evol = t_evol.loc[[p for p in GROUPES_EVOL if p in t_evol.index]]
     assert abs(t_evol.values.sum() - t.values.sum()) < 0.01
 
+    # Autonomie sans Morbihan Habitat (identifié par son nom d'affichage, un seul identifiant)
+    ids_mh = tot.loc[tot["nom_affichage"] == MORBIHAN_HABITAT, "idBeneficiaire"].unique()
+    if len(ids_mh) != 1:
+        raise ValueError(f"{MORBIHAN_HABITAT} : {len(ids_mh)} identifiants trouvés, 1 attendu")
+    auto = tot[tot["groupe_evolution"] == AUTONOMIE]
+    mh_auto = auto[auto["idBeneficiaire"] == ids_mh[0]]
+    auto_sans_mh = auto[auto["idBeneficiaire"] != ids_mh[0]].groupby("annee")["montant"].sum()
+    mh_annees = sorted(mh_auto["annee"].unique())
+    mh_note = (f"Morbihan Habitat reçoit {euros(mh_auto['montant'].sum())} de subventions classées en Autonomie "
+               f"({', '.join(f'{euros(x)} en {a}' for a, x in mh_auto.groupby('annee')['montant'].sum().items())}), "
+               f"puis plus aucune après {max(mh_annees)} : cet organisme a ensuite été rattaché à une autre politique "
+               "(ses subventions suivantes relèvent de Solidarité des territoires / Habitat). "
+               "La courbe grise d'Autonomie (« sans MH ») le retire pour montrer l'évolution à périmètre "
+               "comparable ; elle se confond avec la courbe bleue dès que Morbihan Habitat n'y figure plus.")
+
     types = (tot.groupby("type_beneficiaire")
              .agg(montant=("montant", "sum"), subventions=("id", "size"),
                   beneficiaires=("idBeneficiaire", "nunique"))
@@ -439,7 +477,7 @@ def main() -> None:
 
     figs = {
         "empile": fig_empile(t),
-        "multiples": fig_multiples(t_evol),
+        "multiples": fig_multiples(t_evol, {AUTONOMIE: ("sans Morbihan Habitat", "sans MH", auto_sans_mh)}),
         "types": fig_barres_h(
             types.index.tolist(), types["montant"],
             [f"{fr(r.subventions, 0)} subventions · {fr(r.beneficiaires, 0)} bénéficiaires"
@@ -599,6 +637,7 @@ footer a {{ color: inherit; }}
   <p class="sous">En millions d'euros. Attention : chaque graphique a sa propre échelle, pour rendre lisibles les petites politiques ; comparez les montants, pas les hauteurs. Le groupe Insertion est séparé en deux selon l'objet de chaque subvention : fonds européens (FSE) et hors FSE.</p>
   {div['multiples']}
   <p class="note">Les subventions FSE (Fonds social européen) sont des fonds européens gérés par le Département : elles ne relèvent pas uniquement de crédits départementaux propres.</p>
+  <p class="note">{escape(mh_note)}</p>
 </section>
 
 <div class="duo">

@@ -70,6 +70,11 @@ from *Insertion – hors FSE*. FSE grants are European funds managed by the Depa
 Department's own credits. A structure receiving both appears in both tables with the amount of
 each. The renewal analysis keeps the three solidarity groups.
 
+The *Autonomie* panel of the evolution chart adds a grey line without Morbihan Habitat: it received
+€1,168,389 classed in Autonomie (2020–2021), then none, its later grants falling under *Solidarité
+des territoires / Habitat*. Without it, Autonomie is €5.7 M instead of €6.8 M in 2020; the two
+lines merge from 2022.
+
 Requires Python 3, pandas and plotly. To rebuild everything from the raw file:
 
 ```
