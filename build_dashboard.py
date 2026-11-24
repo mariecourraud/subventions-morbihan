@@ -29,7 +29,7 @@ LIEN_DEPOT = "Méthode, code et limites (GitHub)"
 JS_ECRAN_ETROIT = r"""
 (function () {
   var SEUIL = 600;
-  var GRILLES = {"fig-multiples": true, "fig-flux": true};   // graphiques à panneaux
+  var GRILLES = {"fig-flux": true};   // graphiques à panneaux
   var NOMS = {"fig-top": 20, "fig-hors_fse": 18};             // longueur max des noms d'axe
   function court(t, n) { return t.length > n ? t.slice(0, n - 1).trim() + "…" : t; }
   function recouper(t, n) {   // recoupe un titre en lignes de n caractères au plus
@@ -230,7 +230,115 @@ def meur(x: float) -> str:
 
 # ---------------------------------------------------------------- Mise en forme commune
 L = THEME["light"]
-FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
+FONT = '"Poppins", system-ui, -apple-system, "Segoe UI", sans-serif'
+FONT_TITRE = 'Georgia, "Times New Roman", serif'
+
+
+# ---------------------------------------------------------------- Blocs de couleur
+def _lum(h: str) -> float:
+    """Luminance relative (WCAG) d'une couleur #rrggbb."""
+    def canal(c: float) -> float:
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    return 0.2126 * canal(r) + 0.7152 * canal(g) + 0.0722 * canal(b)
+
+
+def _melange(h: str, t: float) -> str:
+    """Mélange une couleur avec du noir (t = part de noir)."""
+    return "#" + "".join(f"{round(int(h[i:i + 2], 16) * (1 - t)):02x}" for i in (1, 3, 5))
+
+
+def fond_bloc(h: str, contraste: float = 4.6) -> tuple[str, str]:
+    """Couleur de fond assez foncée pour du texte blanc lisible (contraste WCAG ≥ 4,5),
+    et une variante plus sombre pour le dégradé."""
+    t = 0.0
+    while (1.05 / (_lum(_melange(h, t)) + 0.05)) < contraste and t < 0.9:
+        t += 0.02
+    return _melange(h, t), _melange(h, min(t + 0.14, 0.95))
+
+
+def sparkline(v: list, w: list | None = None, annees: list | None = None) -> str:
+    """Petite courbe SVG blanche (valeurs en M€) ; w = courbe de comparaison en pointillés."""
+    W, H, px, py = 220, 64, 6, 8
+    vmax = max(max(v), max(w) if w else 0) or 1
+    def pts(s):
+        n = len(s)
+        return [(px + i * (W - 2 * px) / (n - 1), H - py - x / vmax * (H - 2 * py)) for i, x in enumerate(s)]
+    p = pts(v)
+    ligne = " ".join(f"{x:.1f},{y:.1f}" for x, y in p)
+    aire = f"M{p[0][0]:.1f},{H} L" + " L".join(f"{x:.1f},{y:.1f}" for x, y in p) + f" L{p[-1][0]:.1f},{H} Z"
+    svg = [f'<svg viewBox="0 0 {W} {H}" class="spark" aria-hidden="true" focusable="false">',
+           f'<path d="{aire}" fill="#fff" fill-opacity=".14"/>']
+    if w:
+        lw = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts(w))
+        svg.append(f'<polyline points="{lw}" fill="none" stroke="#fff" stroke-opacity=".6" '
+                   'stroke-width="1.6" stroke-dasharray="4 3"/>')
+    svg.append(f'<polyline points="{ligne}" fill="none" stroke="#fff" stroke-width="2.4" '
+               'stroke-linejoin="round" stroke-linecap="round"/>')
+    for i, (x, y) in enumerate(p):
+        dernier = i == len(p) - 1
+        titre = f"<title>{annees[i]} : {fr(v[i])} M€</title>" if annees else ""
+        svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{4.2 if dernier else 3}" fill="#fff" '
+                   f'fill-opacity="{1 if dernier else .85}">{titre}</circle>')
+    svg.append("</svg>")
+    return "".join(svg)
+
+
+def evolution_pct(v0: float, v1: float) -> str:
+    if v0 <= 0:
+        return "nouveau"
+    d = (v1 / v0 - 1) * 100
+    return f"{'+' if d >= 0 else '−'}{fr(abs(d))} %"
+
+
+def titre_bloc(nom: str) -> str:
+    """« Autonomie (personnes âgées…) » -> titre court + précision en petit dessous."""
+    if " (" in nom and nom.endswith(")"):
+        court_nom, precision = nom[:-1].split(" (", 1)
+        return f'{escape(court_nom)}<small>{escape(precision)}</small>'
+    return escape(nom)
+
+
+def cartes_evolution(t: pd.DataFrame, comparaisons: dict | None = None) -> str:
+    """Un bloc de couleur par politique : montant de la dernière année, évolution depuis la
+    première, petite courbe sur la période (chaque bloc a sa propre échelle)."""
+    c = couleurs("light")
+    annees = [str(a) for a in t.columns]
+    a0, a1 = annees[0], annees[-1]
+    blocs = []
+    for p in [p for p in GROUPES_EVOL if p in t.index]:
+        v = (t.loc[p] / 1e6).tolist()
+        fond, fond2 = fond_bloc(c[COULEUR_CLE[p]])
+        w, extra = None, ""
+        if comparaisons and p in comparaisons:
+            nom, _, serie = comparaisons[p]
+            w = (serie.reindex(t.columns, fill_value=0) / 1e6).tolist()
+            extra = (f'<div class="evo-x"><span class="tiret" aria-hidden="true"></span>'
+                     f'{escape(nom)} : {evolution_pct(w[0], w[-1])}</div>')
+        d = evolution_pct(v[0], v[-1])
+        fleche = "" if d == "nouveau" else ("▲" if v[-1] >= v[0] else "▼")
+        blocs.append(
+            f'<article class="evo" style="--c1:{fond};--c2:{fond2}">'
+            f'<h3 class="evo-t">{titre_bloc(libelle(p))}</h3>'
+            f'<div class="evo-v">{fr(v[-1])}<span> M€ en {a1}</span></div>'
+            f'<div class="evo-d"><span class="puce">{fleche} {d}</span> depuis {a0}</div>'
+            f'{extra}{sparkline(v, w, annees)}'
+            f'<div class="evo-a"><span>{a0}</span><span>Total {fr(sum(v))} M€</span><span>{a1}</span></div>'
+            f'</article>')
+    return f'<div class="evo-grille">{"".join(blocs)}</div>'
+
+
+def legende_empile(t: pd.DataFrame) -> str:
+    """Légende HTML placée à côté du graphique empilé : même ordre que l'empilement
+    (haut en premier), avec le total de la période et la part de chaque politique."""
+    total = t.values.sum()
+    lignes = []
+    for p in reversed([p for p in GROUPES if p in t.index]):
+        s = t.loc[p].sum()
+        lignes.append(f'<li><span class="pastille" data-cle="{COULEUR_CLE[p]}"></span>'
+                      f'<span class="lg-nom">{escape(libelle(p))}</span>'
+                      f'<span class="lg-v">{fr(s / 1e6)} M€<small>{fr(s / total * 100)} %</small></span></li>')
+    return f'<ul class="legende" aria-label="Légende et total de la période">{"".join(lignes)}</ul>'
 
 
 def mise_en_page(fig: go.Figure, hauteur: int, **kw) -> go.Figure:
@@ -265,22 +373,25 @@ def fig_empile(t: pd.DataFrame) -> go.Figure:
         if p not in t.index:
             continue
         v = t.loc[p]
+        # « Non ventilé » hachuré : montant dont la politique n'a pas pu être déterminée
+        motif = dict(shape="/", fgcolor=L["surface"], size=7, solidity=0.25) if p == NON_VENTILE else None
         fig.add_bar(
             x=annees, y=v / 1e6, name=libelle(p), meta=COULEUR_CLE[p],
-            marker=dict(color=c[COULEUR_CLE[p]], line=dict(color=L["surface"], width=2)),
+            marker=dict(color=c[COULEUR_CLE[p]], line=dict(color=L["surface"], width=2.5), pattern=motif),
             customdata=[meur(x) for x in v],
             hovertemplate="%{x} · " + escape(libelle(p)) + "<br><b>%{customdata}</b><extra></extra>",
         )
     tot = t.sum()
     for i, x in enumerate(tot):  # position par rang : « 2020 » serait lu comme l'indice 2020
-        fig.add_annotation(x=i, y=x / 1e6, text=f"<b>{meur(x)}</b>", showarrow=False, yshift=12,
-                           font=dict(color=L["ink"]))
-    fig.update_layout(barmode="stack", bargap=0.45, barcornerradius=4,
-                      legend=dict(orientation="h", y=-0.12, x=0, traceorder="normal",
-                                  font=dict(color=L["ink2"])))
-    fig.update_yaxes(title_text="M€", title_font=dict(color=L["muted"]), rangemode="tozero")
-    fig.update_xaxes(type="category")
-    return mise_en_page(fig, 480)
+        # Total en pastille sombre au-dessus de chaque barre (name="pastille" : recoloré par le thème)
+        fig.add_annotation(x=i, y=x / 1e6, text=f"<b>{meur(x)}</b>", showarrow=False, yshift=20,
+                           name="pastille", bgcolor=L["ink"], borderpad=5,
+                           font=dict(color=L["surface"], size=13))
+    fig.update_layout(barmode="stack", bargap=0.58, barcornerradius=10, showlegend=False)
+    fig.update_yaxes(rangemode="tozero", ticksuffix=" M€", griddash="dot", showline=False,
+                     zeroline=False, nticks=6, range=[0, tot.max() / 1e6 * 1.14])
+    fig.update_xaxes(type="category", showline=False, tickfont=dict(size=14))
+    return mise_en_page(fig, 440)
 
 
 def fig_multiples(t: pd.DataFrame, comparaisons: dict | None = None) -> go.Figure:
@@ -684,8 +795,9 @@ def main() -> None:
                f"({', '.join(f'{euros(x)} en {a}' for a, x in mh_auto.groupby('annee')['montant'].sum().items())}), "
                f"puis plus aucune après {max(mh_annees)} : cet organisme a ensuite été rattaché à une autre politique "
                "(ses subventions suivantes relèvent de Solidarité des territoires / Habitat). "
-               "La courbe grise d'Autonomie (« sans MH ») le retire pour montrer l'évolution à périmètre "
-               "comparable ; elle se confond avec la courbe bleue dès que Morbihan Habitat n'y figure plus.")
+               "Dans le bloc Autonomie, la courbe en pointillés (« sans Morbihan Habitat ») le retire pour montrer "
+               "l'évolution à périmètre comparable ; elle se confond avec la courbe pleine dès que Morbihan Habitat "
+               "n'y figure plus.")
 
     types = (tot.groupby("type_beneficiaire")
              .agg(montant=("montant", "sum"), subventions=("id", "size"),
@@ -712,7 +824,6 @@ def main() -> None:
 
     figs = {
         "empile": fig_empile(t),
-        "multiples": fig_multiples(t_evol, {AUTONOMIE: ("sans Morbihan Habitat", "sans MH", auto_sans_mh)}),
         "types": fig_barres_h(
             types.index.tolist(), types["montant"],
             [f"{fr(r.subventions, 0)} subventions · {fr(r.beneficiaires, 0)} bénéficiaires"
@@ -740,6 +851,12 @@ def main() -> None:
     tab_pol.index = [libelle(p) for p in tab_pol.index]
     tab_pol = tab_pol.reset_index().rename(columns={"index": "Politique (M€)"})
     tab_pol.columns = [str(c) for c in tab_pol.columns]
+
+    tab_evol = t_evol.map(lambda x: fr(x / 1e6))
+    tab_evol["Évolution"] = [evolution_pct(r.iloc[0], r.iloc[-1]) for _, r in t_evol.iterrows()]
+    tab_evol.index = [libelle(p) for p in tab_evol.index]
+    tab_evol = tab_evol.reset_index().rename(columns={"index": "Politique (M€)"})
+    tab_evol.columns = [str(c) for c in tab_evol.columns]
 
     tab_types = pd.DataFrame({
         "Type de bénéficiaire": types.index,
@@ -778,14 +895,43 @@ def main() -> None:
     # Thème sombre : couleurs des séries et de l'habillage, appliquées par script
     theme_js = {m: dict(**THEME[m], series=couleurs(m)) for m in THEME}
 
+    nb_ans = a_max - a_min + 1
+    icones = {
+        "euro": '<path d="M17 7.5A6 6 0 1 0 17 16.5"/><path d="M5 10.5h8M5 13.5h8"/>',
+        "doc": '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+        "gens": '<circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/>'
+                '<circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A4.5 4.5 0 0 1 21 19"/>',
+        "cal": '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+    }
     kpis = [
-        (meur(montant), "Montant total attribué"),
-        (fr(nb_subv, 0), "Subventions"),
-        (fr(nb_benef, 0), "Bénéficiaires distincts"),
-        (f"{a_min}–{a_max}", f"Années couvertes ({a_max - a_min + 1} ans)"),
+        ("euro", meur(montant), "Montant total attribué", f"≈ {meur(montant / nb_ans)} par an"),
+        ("doc", fr(nb_subv, 0), "Subventions", f"{fr(montant / nb_subv / 1e3, 0)} k€ en moyenne"),
+        ("gens", fr(nb_benef, 0), "Bénéficiaires distincts", "personnes morales"),
+        ("cal", f"{a_min}–{a_max}", f"Années couvertes", f"{nb_ans} exercices"),
     ]
-    kpi_html = "".join(f'<div class="kpi"><div class="kpi-v">{v}</div><div class="kpi-l">{escape(l)}</div></div>'
-                       for v, l in kpis)
+    kpi_html = "".join(
+        f'<div class="kpi"><div class="kpi-tete"><span class="kpi-i"><svg viewBox="0 0 24 24" aria-hidden="true">'
+        f'{icones[i]}</svg></span><span class="kpi-l">{escape(l)}</span></div>'
+        f'<div class="kpi-v">{v}</div><div class="kpi-s">{escape(s)}</div></div>'
+        for i, v, l, s in kpis)
+
+    # Variables CSS de chaque thème (couleurs des séries, habillage, bandeau gris)
+    BANDEAU = {
+        "light": dict(band1="#f3f2ee", band2="#e2e0da", tile="rgba(255,255,255,.72)",
+                      tileb="rgba(255,255,255,.95)", iconbg="#3b3b38", iconfg="#ffffff",
+                      ombre="0 1px 2px rgba(20,20,10,.04), 0 6px 20px rgba(20,20,10,.05)"),
+        "dark": dict(band1="#2b2b29", band2="#1d1d1b", tile="rgba(255,255,255,.05)",
+                     tileb="rgba(255,255,255,.09)", iconbg="#e6e5e0", iconfg="#1a1a19",
+                     ombre="0 1px 2px rgba(0,0,0,.3)"),
+    }
+    def vars_css(m: str) -> str:
+        th, b, s = THEME[m], BANDEAU[m], couleurs(m)
+        return (f"--page:{th['page']};--surface:{th['surface']};--ink:{th['ink']};--ink2:{th['ink2']};"
+                f"--muted:{th['muted']};--grid:{th['grid']};--border:{th['border']};"
+                + "".join(f"--{k}:{v};" for k, v in s.items())
+                + f"--band1:{b['band1']};--band2:{b['band2']};--tile:{b['tile']};--tileb:{b['tileb']};"
+                f"--iconbg:{b['iconbg']};--iconfg:{b['iconfg']};--ombre:{b['ombre']};")
+    pastilles_css = "\n".join(f'.pastille[data-cle="{k}"] {{ background: var(--{k}); }}' for k in couleurs("light"))
 
     html = f"""<!doctype html>
 <html lang="fr">
@@ -793,45 +939,86 @@ def main() -> None:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Subventions du Morbihan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap">
 <script>{get_plotlyjs()}</script>
 <style>
-:root {{
-  color-scheme: light;
-  --page: {L['page']}; --surface: {L['surface']}; --ink: {L['ink']}; --ink2: {L['ink2']};
-  --muted: {L['muted']}; --grid: {L['grid']}; --border: {L['border']};
-  --b0: {BLEUS['light'][0]}; --b1: {BLEUS['light'][1]}; --b2: {BLEUS['light'][2]};
-}}
+:root {{ color-scheme: light; {vars_css('light')} }}
 @media (prefers-color-scheme: dark) {{
-  :root:not([data-theme="light"]) {{
-    color-scheme: dark;
-    --page: {THEME['dark']['page']}; --surface: {THEME['dark']['surface']}; --ink: {THEME['dark']['ink']};
-    --ink2: {THEME['dark']['ink2']}; --muted: {THEME['dark']['muted']}; --grid: {THEME['dark']['grid']};
-    --border: {THEME['dark']['border']};
-    --b0: {BLEUS['dark'][0]}; --b1: {BLEUS['dark'][1]}; --b2: {BLEUS['dark'][2]};
-  }}
+  :root:not([data-theme="light"]) {{ color-scheme: dark; {vars_css('dark')} }}
 }}
-:root[data-theme="dark"] {{
-  color-scheme: dark;
-  --page: {THEME['dark']['page']}; --surface: {THEME['dark']['surface']}; --ink: {THEME['dark']['ink']};
-  --ink2: {THEME['dark']['ink2']}; --muted: {THEME['dark']['muted']}; --grid: {THEME['dark']['grid']};
-  --border: {THEME['dark']['border']};
-  --b0: {BLEUS['dark'][0]}; --b1: {BLEUS['dark'][1]}; --b2: {BLEUS['dark'][2]};
-}}
+:root[data-theme="dark"] {{ color-scheme: dark; {vars_css('dark')} }}
 * {{ box-sizing: border-box; }}
-body {{ margin: 0; background: var(--page); color: var(--ink); font-family: {FONT}; line-height: 1.5; }}
-main {{ max-width: 1120px; margin: 0 auto; padding: 32px 16px 48px; }}
-header h1 {{ font-size: 1.75rem; margin: 0 0 4px; font-weight: 650; }}
-header p {{ margin: 0; color: var(--ink2); }}
-.citation {{ margin: 20px 0 0; padding: 4px 0 4px 16px; border-left: 3px solid var(--b0); max-width: 760px; }}
-.citation p {{ font-style: italic; color: var(--ink); font-size: 1.02rem; }}
-.kpis {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0; }}
-.kpi, .card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }}
-.kpi {{ padding: 16px 20px; }}
-.kpi-v {{ font-size: 1.9rem; font-weight: 650; }}
-.kpi-l {{ color: var(--ink2); font-size: .9rem; }}
-.card {{ padding: 20px 20px 12px; margin-bottom: 16px; }}
-.card h2 {{ font-size: 1.1rem; margin: 0 0 2px; font-weight: 650; }}
-.card .sous {{ margin: 0 0 12px; color: var(--ink2); font-size: .9rem; }}
+body {{ margin: 0; background: var(--page); color: var(--ink); font-family: {FONT}; line-height: 1.55; font-size: 15px; }}
+h1, h2, h3, .h3 {{ font-family: {FONT_TITRE}; font-weight: 700; letter-spacing: -.005em; }}
+main {{ max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }}
+
+/* Bandeau du haut */
+.bandeau {{ position: relative; overflow: hidden; overflow: clip; border-radius: 22px; padding: 28px 32px 32px;
+  background: linear-gradient(135deg, var(--band1), var(--band2)); border: 1px solid var(--border);
+  box-shadow: var(--ombre); margin-bottom: 20px; }}
+.bandeau::before, .bandeau::after {{ content: ""; position: absolute; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(255,255,255,.55), rgba(255,255,255,0) 70%); }}
+.bandeau::before {{ width: 420px; height: 420px; right: -120px; top: -180px; }}
+.bandeau::after {{ width: 260px; height: 260px; right: 220px; bottom: -170px; opacity: .6; }}
+:root[data-theme="dark"] .bandeau::before, :root[data-theme="dark"] .bandeau::after {{ opacity: .06; }}
+@media (prefers-color-scheme: dark) {{
+  :root:not([data-theme="light"]) .bandeau::before, :root:not([data-theme="light"]) .bandeau::after {{ opacity: .06; }}
+}}
+.bandeau > * {{ position: relative; }}
+.bandeau h1 {{ font-size: 2.1rem; line-height: 1.2; margin: 0 0 8px; max-width: 820px; }}
+.bandeau .chapeau {{ margin: 0; color: var(--ink2); max-width: 820px; }}
+.provisoire {{ display: inline-block; margin-top: 10px; padding: 2px 10px; border-radius: 999px; font-size: .8rem;
+  font-weight: 500; color: var(--ink2); background: var(--tile); border: 1px solid var(--tileb); }}
+.citation {{ margin: 20px 0 0; padding: 2px 0 2px 18px; border-left: 3px solid var(--ink2); max-width: 780px; }}
+.citation p {{ margin: 0; font-family: {FONT_TITRE}; font-style: italic; color: var(--ink); font-size: 1.08rem; line-height: 1.5; }}
+.kpis {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0 0; }}
+.kpi {{ background: var(--tile); border: 1px solid var(--tileb); border-radius: 16px; padding: 14px 18px 16px;
+  backdrop-filter: blur(6px); }}
+.kpi-tete {{ display: flex; align-items: center; gap: 10px; }}
+.kpi-i {{ width: 30px; height: 30px; border-radius: 9px; background: var(--iconbg); color: var(--iconfg);
+  display: inline-grid; place-items: center; flex: none; }}
+.kpi-i svg {{ width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round; }}
+.kpi-l {{ color: var(--ink2); font-size: .85rem; font-weight: 500; }}
+.kpi-v {{ font-size: 2rem; font-weight: 600; margin-top: 10px; line-height: 1.1; font-variant-numeric: tabular-nums; }}
+.kpi-s {{ color: var(--muted); font-size: .8rem; margin-top: 4px; }}
+
+/* Cartes */
+.card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--ombre);
+  padding: 22px 24px 14px; margin-bottom: 18px; }}
+.card h2 {{ font-size: 1.3rem; margin: 0 0 4px; }}
+.card .sous {{ margin: 0 0 14px; color: var(--ink2); font-size: .88rem; }}
+
+/* Graphique empilé + légende latérale */
+.empile {{ display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 20px; align-items: center; }}
+.legende {{ list-style: none; margin: 0; padding: 0; font-size: .85rem; }}
+.legende li {{ display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center;
+  padding: 7px 0; border-bottom: 1px solid var(--grid); }}
+.legende li:last-child {{ border-bottom: 0; }}
+.legende .lg-nom {{ color: var(--ink2); line-height: 1.3; }}
+.legende .lg-v {{ font-weight: 600; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }}
+.legende small {{ display: block; font-weight: 400; color: var(--muted); font-size: .75rem; }}
+.pastille[data-cle="nv"] {{ background: repeating-linear-gradient(135deg, var(--nv) 0 3px, var(--surface) 3px 4.5px); }}
+
+/* Blocs d'évolution */
+.evo-grille {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }}
+.evo {{ position: relative; overflow: hidden; overflow: clip; color: #fff; border-radius: 18px; padding: 16px 16px 10px;
+  background: linear-gradient(140deg, var(--c1), var(--c2)); display: flex; flex-direction: column; }}
+.evo::after {{ content: ""; position: absolute; width: 160px; height: 160px; right: -60px; top: -70px;
+  border-radius: 50%; background: rgba(255,255,255,.10); pointer-events: none; }}
+.evo-t {{ font-size: .98rem; line-height: 1.25; margin: 0 0 10px; min-height: 2.5em; position: relative; }}
+.evo-t small {{ display: block; font-family: {FONT}; font-weight: 400; font-size: .72rem; opacity: .85; margin-top: 2px; }}
+.evo-v {{ font-size: 1.85rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }}
+.evo-v span {{ font-size: .78rem; font-weight: 400; opacity: .85; }}
+.evo-d {{ font-size: .78rem; margin-top: 8px; opacity: .95; }}
+.puce {{ display: inline-block; padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.2);
+  font-weight: 600; margin-right: 2px; }}
+.evo-x {{ font-size: .74rem; margin-top: 6px; opacity: .9; display: flex; align-items: center; gap: 6px; }}
+.tiret {{ width: 16px; border-top: 2px dashed rgba(255,255,255,.75); }}
+.spark {{ display: block; width: 100%; height: auto; margin-top: auto; padding-top: 10px; overflow: visible; }}
+.evo-a {{ display: flex; justify-content: space-between; font-size: .7rem; opacity: .8; margin-top: 2px; }}
 .duo {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
 .duo .card {{ margin-bottom: 16px; }}
 details {{ margin: 8px 0 4px; font-size: .9rem; }}
@@ -851,9 +1038,7 @@ td:not(:first-child), th:not(:first-child) {{ text-align: right; }}
 .bloc-sol td:nth-child(5), .bloc-sol th:nth-child(5) {{ text-align: right; white-space: nowrap; }}
 .bloc-sol td:nth-child(6) {{ color: var(--ink2); }}
 .pastille {{ width: 12px; height: 12px; border-radius: 3px; display: inline-block; }}
-.pastille[data-cle="b0"] {{ background: var(--b0); }}
-.pastille[data-cle="b1"] {{ background: var(--b1); }}
-.pastille[data-cle="b2"] {{ background: var(--b2); }}
+{pastilles_css}
 .note {{ color: var(--ink2); font-size: .85rem; margin: 6px 0 0; }}
 .table-scroll {{ overflow-x: auto; }}
 .h3 {{ font-size: 1rem; margin: 12px 0 2px; font-weight: 650; }}
@@ -887,34 +1072,53 @@ footer a {{ color: inherit; }}
   .onglets.actifs [role="tablist"] {{ display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }}
   .onglets [role="tab"] {{ padding: 8px 6px; font-size: .85rem; gap: 6px; text-align: left; }}
 }}
+@media (max-width: 960px) {{
+  .evo-grille {{ grid-template-columns: repeat(3, 1fr); }}
+  .empile {{ grid-template-columns: 1fr; }}
+  .legende {{ columns: 2; column-gap: 24px; }}
+  .legende li {{ break-inside: avoid; }}
+}}
 @media (max-width: 760px) {{
-  .kpis {{ grid-template-columns: repeat(2, 1fr); }}
+  .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
+  .kpi {{ padding: 12px; }}
   .duo {{ grid-template-columns: 1fr; }}
+  .evo-grille {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }}
+  .bandeau {{ padding: 22px 18px 20px; border-radius: 18px; }}
+  .bandeau h1 {{ font-size: 1.6rem; }}
+  .legende {{ columns: 1; }}
+}}
+@media (max-width: 420px) {{
+  .kpi-v {{ font-size: 1.3rem; }}
+  .kpi-tete {{ flex-direction: column; align-items: flex-start; gap: 6px; }}
+  .kpi-l {{ line-height: 1.25; }}
+  .evo {{ padding: 14px 12px 8px; }}
+  .evo-v {{ font-size: 1.45rem; }}
+  .evo-a span:nth-child(2) {{ display: none; }}
 }}
 </style>
 </head>
 <body>
 <main>
-<header>
+<header class="bandeau">
   <p class="haut-depot"><a class="lien-depot" href="{DEPOT_URL}">{LIEN_DEPOT}</a></p>
   <h1>Subventions du Département du Morbihan, {a_min}–{a_max}</h1>
-  <p>Subventions aux personnes morales, ventilées selon la segmentation stratégique du Département au 1<sup>er</sup> janvier 2025. Document provisoire, susceptible d'évoluer : les chiffres présentés ne constituent pas une donnée officielle.</p>
-  <blockquote class="citation"><p>Une politique publique ne peut se mesurer à sa seule enveloppe budgétaire. Elle vaut aussi par la qualité du travail de celles et ceux qui la mettent en œuvre, déterminée par les conditions dans lesquelles ils exercent leur métier.</p></blockquote>
+  <p class="chapeau">Subventions aux personnes morales, ventilées selon la segmentation stratégique du Département au 1<sup>er</sup> janvier 2025. Document provisoire, susceptible d'évoluer : les chiffres présentés ne constituent pas une donnée officielle.</p>
+  <blockquote class="citation"><p>Une politique publique ne peut se mesurer à sa seule enveloppe budgétaire. Elle vaut aussi par la qualité du travail de celles et ceux qui la mettent en œuvre et par les conditions dans lesquelles ils exercent leur métier.</p></blockquote>
+  <section class="kpis" aria-label="Chiffres clés">{kpi_html}</section>
 </header>
-
-<section class="kpis" aria-label="Chiffres clés">{kpi_html}</section>
 
 <section class="card">
   <h2>Montants par année et par politique publique</h2>
-  <p class="sous">En millions d'euros. Total de l'année au-dessus de chaque barre. Les Solidarités humaines sont découpées en trois groupes (nuances de bleu).</p>
-  {div['empile']}
+  <p class="sous">En millions d'euros. Total de l'année au-dessus de chaque barre ; dans la légende, le total de chaque politique sur la période. Les Solidarités humaines sont découpées en trois groupes (nuances de bleu) ; « Non ventilé » est hachuré.</p>
+  <div class="empile"><div>{div['empile']}</div>{legende_empile(t)}</div>
   <details><summary>Voir les données</summary>{table_html(tab_pol)}</details>
 </section>
 
 <section class="card">
   <h2>Évolution de chaque politique publique, {a_min}–{a_max}</h2>
-  <p class="sous">En millions d'euros. Attention : chaque graphique a sa propre échelle, pour rendre lisibles les petites politiques ; comparez les montants, pas les hauteurs. Le groupe Insertion est séparé en deux selon l'objet de chaque subvention : fonds européens (FSE) et hors FSE.</p>
-  {div['multiples']}
+  <p class="sous">Montant de la dernière année et évolution depuis {a_min}. Attention : chaque courbe a sa propre échelle, pour rendre lisibles les petites politiques ; comparez les montants, pas les hauteurs (survolez un point pour son montant). Le groupe Insertion est séparé en deux selon l'objet de chaque subvention : fonds européens (FSE) et hors FSE.</p>
+  {cartes_evolution(t_evol, {AUTONOMIE: ("sans Morbihan Habitat", "sans MH", auto_sans_mh)})}
+  <details><summary>Voir les données</summary><div class="table-scroll">{table_html(tab_evol)}</div></details>
   <p class="note">Les subventions FSE (Fonds social européen) sont des fonds européens gérés par le Département : elles ne relèvent pas uniquement de crédits départementaux propres.</p>
   <p class="note">{escape(mh_note)}</p>
 </section>
@@ -980,7 +1184,10 @@ footer a {{ color: inherit; }}
           lay[k + ".zerolinecolor"] = th.axis; lay[k + ".tickfont.color"] = th.muted;
         }}
       }});
-      (gd.layout.annotations || []).forEach(function (a, i) {{ lay["annotations[" + i + "].font.color"] = th.ink; }});
+      (gd.layout.annotations || []).forEach(function (a, i) {{
+        if (a.name === "pastille") {{ lay["annotations[" + i + "].bgcolor"] = th.ink; lay["annotations[" + i + "].font.color"] = th.surface; }}
+        else lay["annotations[" + i + "].font.color"] = th.ink;
+      }});
       if (gd.layout.legend) lay["legend.font.color"] = th.ink2;
       Plotly.relayout(gd, lay);
       gd.data.forEach(function (tr, i) {{
@@ -988,6 +1195,7 @@ footer a {{ color: inherit; }}
         var c = th.series[tr.meta];
         if (!c) return;
         var s = {{ "marker.color": c, "marker.line.color": th.surface }};
+        if (tr.marker && tr.marker.pattern && tr.marker.pattern.shape) s["marker.pattern.fgcolor"] = th.surface;
         if (tr.type === "scatter") {{ s["line.color"] = c; s["textfont.color"] = th.ink2; }}
         else {{ s["textfont.color"] = th.ink2; }}
         Plotly.restyle(gd, s, [i]);
@@ -995,6 +1203,10 @@ footer a {{ color: inherit; }}
     }});
   }}
   window.addEventListener("load", appliquer);
+  // Police Poppins chargée après coup : les graphiques recalculent la place de leurs textes
+  if (document.fonts) document.fonts.ready.then(function () {{
+    document.querySelectorAll(".js-plotly-plot").forEach(function (gd) {{ Plotly.Plots.resize(gd); }});
+  }});
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", appliquer);
   new MutationObserver(appliquer).observe(document.documentElement, {{ attributes: true, attributeFilter: ["data-theme"] }});
 }})();
