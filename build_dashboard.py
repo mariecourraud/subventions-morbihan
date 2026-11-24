@@ -152,12 +152,22 @@ JS_ECRAN_ETROIT = r"""
 """
 
 # ---------------------------------------------------------------- Palette
-# Palette catégorielle de référence (ordre fixe, validé pour les paires adjacentes),
-# thème clair uniquement. « Non ventilé » est en gris neutre.
-SERIES = {
-    "light": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"],
+# Une paire (foncé, clair) par politique, tirée d'une palette de 9 gammes (2e et 4e teinte de
+# chaque gamme ; Éducation prend les 3e et 4e de « Dusk », dont Attractivité garde la 2e).
+# La teinte foncée sert partout (barres, pastilles) ; la claire, sur fond sombre (courbes des blocs).
+# « Non ventilé » reste en gris neutre. Thème clair uniquement.
+TEINTES = {
+    "b0": ("#D4A017", "#F7E7B5"),   # Enfance et famille – Mustard
+    "b1": ("#9D174D", "#F7A1B3"),   # Insertion et développement social – Berry
+    "b2": ("#7D6CC4", "#E7D6F7"),   # Autonomie – Lavender
+    "s1": ("#F9844A", "#FDD9B5"),   # Solidarité des territoires – Sunset
+    "s2": ("#184965", "#A8DADC"),   # Infrastructures et mobilité – Ocean
+    "s3": ("#527F5B", "#DCEAD9"),   # Environnement – Sage
+    "s4": ("#C57598", "#F08A8A"),   # Éducation – Dusk (roses)
+    "s5": ("#42426F", "#D9D9E2"),   # Attractivité et animation territoriales – Dusk (indigo ; clair dérivé)
+    "s6": ("#1E88E5", "#BBDEFB"),   # Ressources – Arctic
+    "nv": ("#898781", "#BCBAB3"),   # Non ventilé – gris
 }
-GRIS_NV = {"light": "#898781"}
 # Gris des graphiques qui ne portent pas sur une politique (les couleurs restent réservées aux politiques)
 GRIS_ACCENT, GRIS_FONCE, GRIS_CLAIR = "#1f1f1d", "#5b5a56", "#bcbab3"
 THEME = {
@@ -176,12 +186,11 @@ SH_GROUPES = {_SECT["Enfance et famille"]: EF, _SECT["Insertion et développemen
 AUTRES = [p for p in GRILLE if p != SH]
 GROUPES = [EF, IDS, AUTONOMIE, *AUTRES, NON_VENTILE]
 
-# Couleurs : les trois groupes Solidarités sont trois nuances d'un même bleu (ce sont des
-# subdivisions d'une même politique, et la palette n'a que 8 teintes) ; les six autres
-# politiques gardent les teintes 2 à 7 dans l'ordre fixe ; « Non ventilé » reste gris.
-BLEUS = {"light": ["#104281", "#2a78d6", "#86b6ef"]}
+# Clé de couleur de chaque politique (voir TEINTES) ; s1…s6 suivent l'ordre de GRILLE
 COULEUR_CLE = ({EF: "b0", IDS: "b1", AUTONOMIE: "b2"}
                | {p: f"s{i + 1}" for i, p in enumerate(AUTRES)} | {NON_VENTILE: "nv"})
+assert [p.split()[0] for p in AUTRES] == ["SOLIDARITÉ", "INFRASTRUCTURES", "ENVIRONNEMENT", "ÉDUCATION",
+                                         "ATTRACTIVITÉ", "RESSOURCES"], "ordre des politiques ≠ TEINTES"
 
 # Insertion découpée, subvention par subvention selon l'objet, en deux sous-groupes.
 # Utilisé uniquement dans le graphique d'évolution et les tableaux de bénéficiaires ;
@@ -191,7 +200,7 @@ MORBIHAN_HABITAT = "MORBIHAN HABITAT"  # retiré d'Autonomie dans une courbe de 
 IDS_FSE = "Insertion – fonds européens (FSE)"
 IDS_HORS = "Insertion – hors FSE"
 GROUPES_EVOL = [EF, IDS_FSE, IDS_HORS, AUTONOMIE, *AUTRES, NON_VENTILE]
-COULEUR_CLE |= {IDS_FSE: "b1", IDS_HORS: "b1"}  # même bleu que le groupe Insertion
+COULEUR_CLE |= {IDS_FSE: "b1", IDS_HORS: "b1"}  # même couleur que le groupe Insertion
 
 
 def groupe_evolution(df: pd.DataFrame) -> pd.Series:
@@ -203,11 +212,14 @@ def groupe_evolution(df: pd.DataFrame) -> pd.Series:
     return df["politique_affichage"].mask(ins & fse, IDS_FSE).mask(ins & ~fse, IDS_HORS)
 
 
-def couleurs(mode: str) -> dict:
-    c = {f"s{i}": h for i, h in enumerate(SERIES[mode])}
-    c |= {f"b{i}": h for i, h in enumerate(BLEUS[mode])}
-    c["nv"] = GRIS_NV[mode]
-    return c
+def couleurs(mode: str = "light") -> dict:
+    """Teinte foncée de chaque clé de couleur."""
+    return {k: f for k, (f, _) in TEINTES.items()}
+
+
+def clairs() -> dict:
+    """Teinte claire de chaque clé de couleur."""
+    return {k: c for k, (_, c) in TEINTES.items()}
 
 
 def politique_affichage(df: pd.DataFrame) -> pd.Series:
@@ -237,23 +249,7 @@ FONT = '"Poppins", system-ui, -apple-system, "Segoe UI", sans-serif'
 FONT_TITRE = 'Georgia, "Times New Roman", serif'
 
 
-# ---------------------------------------------------------------- Blocs de couleur
-def _lum(h: str) -> float:
-    """Luminance relative (WCAG) d'une couleur #rrggbb."""
-    def canal(c: float) -> float:
-        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
-    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
-    return 0.2126 * canal(r) + 0.7152 * canal(g) + 0.0722 * canal(b)
-
-
-def encre_sur(fond: str) -> str:
-    """Couleur du texte posé sur un bloc de couleur : blanc s'il est assez lisible
-    (contraste WCAG ≥ 4,5), sinon gris très foncé."""
-    blanc = 1.05 / (_lum(fond) + 0.05)
-    fonce = (_lum(fond) + 0.05) / (_lum("#1a1a19") + 0.05)
-    return "#ffffff" if blanc >= 4.5 or blanc >= fonce else "#1a1a19"
-
-
+# ---------------------------------------------------------------- Blocs d'évolution
 def sparkline(v: list, w: list | None = None, annees: list | None = None) -> str:
     """Petite courbe SVG de la couleur du texte du bloc (valeurs en M€) ; w = courbe de comparaison en pointillés."""
     W, H, px, py = 220, 64, 6, 8
@@ -297,15 +293,14 @@ def titre_bloc(nom: str) -> str:
 
 
 def cartes_evolution(t: pd.DataFrame, comparaisons: dict | None = None) -> str:
-    """Un bloc de couleur par politique : montant de la dernière année, évolution depuis la
-    première, petite courbe sur la période (chaque bloc a sa propre échelle)."""
-    c = couleurs("light")
+    """Un bloc gris foncé par politique, repéré par une pastille de sa couleur : montant de la
+    dernière année, évolution depuis la première, petite courbe sur la période (chaque bloc a
+    sa propre échelle)."""
     annees = [str(a) for a in t.columns]
     a0, a1 = annees[0], annees[-1]
     blocs = []
     for p in [p for p in GROUPES_EVOL if p in t.index]:
         v = (t.loc[p] / 1e6).tolist()
-        fond = c[COULEUR_CLE[p]]   # couleur exacte de la politique (comme dans la légende)
         w, extra = None, ""
         if comparaisons and p in comparaisons:
             nom, _, serie = comparaisons[p]
@@ -315,8 +310,9 @@ def cartes_evolution(t: pd.DataFrame, comparaisons: dict | None = None) -> str:
         d = evolution_pct(v[0], v[-1])
         fleche = "" if d == "nouveau" else ("▲" if v[-1] >= v[0] else "▼")
         blocs.append(
-            f'<article class="evo" style="background:{fond};color:{encre_sur(fond)}">'
-            f'<h3 class="evo-t">{titre_bloc(libelle(p))}</h3>'
+            f'<article class="evo">'
+            f'<h3 class="evo-t"><span class="pastille" data-cle="{COULEUR_CLE[p]}"></span>'
+            f'<span>{titre_bloc(libelle(p))}</span></h3>'
             f'<div class="evo-v">{fr(v[-1])}<span> M€ en {a1}</span></div>'
             f'<div class="evo-d"><span class="puce">{fleche} {d}</span> depuis {a0}</div>'
             f'{extra}{sparkline(v, w, annees)}'
@@ -374,17 +370,17 @@ def fig_empile(t: pd.DataFrame) -> go.Figure:
         motif = dict(shape="/", fgcolor=L["surface"], size=7, solidity=0.25) if p == NON_VENTILE else None
         fig.add_bar(
             x=annees, y=v / 1e6, name=libelle(p), meta=COULEUR_CLE[p],
-            marker=dict(color=c[COULEUR_CLE[p]], line=dict(color=L["surface"], width=2.5), pattern=motif),
+            marker=dict(color=c[COULEUR_CLE[p]], line=dict(width=0), pattern=motif),
             customdata=[meur(x) for x in v],
             hovertemplate="%{x} · " + escape(libelle(p)) + "<br><b>%{customdata}</b><extra></extra>",
         )
     tot = t.sum()
     for i, x in enumerate(tot):  # position par rang : « 2020 » serait lu comme l'indice 2020
-        # Total en pastille sombre au-dessus de chaque barre (name="pastille" : recoloré par le thème)
+        # Total dans une pastille gris foncé au-dessus de chaque barre
         fig.add_annotation(x=i, y=x / 1e6, text=f"<b>{meur(x)}</b>", showarrow=False, yshift=20,
-                           name="pastille", bgcolor=L["ink"], borderpad=5,
+                           bgcolor=GRIS_FONCE, borderpad=5,
                            font=dict(color=L["surface"], size=13))
-    fig.update_layout(barmode="stack", bargap=0.58, barcornerradius=10, showlegend=False)
+    fig.update_layout(barmode="stack", bargap=0.32, barcornerradius=8, showlegend=False)
     fig.update_yaxes(rangemode="tozero", ticksuffix=" M€", griddash="dot", showline=False,
                      zeroline=False, nticks=6, range=[0, tot.max() / 1e6 * 1.14])
     fig.update_xaxes(type="category", showline=False, tickfont=dict(size=14))
@@ -392,20 +388,15 @@ def fig_empile(t: pd.DataFrame) -> go.Figure:
 
 
 def fig_barres_h(noms, valeurs, survol, hauteur) -> go.Figure:
-    """Barres horizontales classées, en gris foncé ; la première (la plus grande) est mise en avant
-    (plus sombre, montant dans une pastille), les autres portent leur montant au bout."""
+    """Barres horizontales classées, toutes en gris foncé, montant écrit au bout de chaque barre."""
     vmax = valeurs.max() / 1e6
-    teintes = [GRIS_ACCENT] + [GRIS_FONCE] * (len(noms) - 1)
     fig = go.Figure(go.Bar(
         y=noms, x=valeurs / 1e6, orientation="h", showlegend=False,
-        marker=dict(color=teintes, line=dict(width=0)),
-        text=[""] + [meur(v) for v in valeurs[1:]], textposition="outside", cliponaxis=False,
+        marker=dict(color=GRIS_FONCE, line=dict(width=0)),
+        text=[meur(v) for v in valeurs], textposition="outside", cliponaxis=False,
         textfont=dict(color=L["ink2"], size=12),
         customdata=survol, hovertemplate="<b>%{y}</b><br>%{customdata}<extra></extra>",
     ))
-    fig.add_annotation(x=vmax, y=noms[0], text=f"<b>{meur(valeurs.iloc[0])}</b>", showarrow=False,
-                       xanchor="left", xshift=8, bgcolor=GRIS_ACCENT, borderpad=4,
-                       font=dict(color="#ffffff", size=12))
     fig.update_layout(bargap=0.38, barcornerradius=3)
     fig.update_xaxes(showgrid=True, gridcolor=L["grid"], zeroline=False, showline=False,
                      ticksuffix=" M€", nticks=5, range=[0, vmax * 1.02])
@@ -554,9 +545,9 @@ def section_renouvellement(df: pd.DataFrame) -> tuple[dict, str]:
 TYPE_COURT = {"Association": "Assoc.", "Intercommunalité": "Interco.", "Établissement public": "Étab. public",
               "Bailleur social": "Bailleur", "Commune": "Commune", "Collège": "Collège", "Autre": "Autre"}
 SYMBOLE_PLURI = "◆"
-# Gamme séquentielle bleue (clair = faible, foncé = élevé) ; elle démarre au cran 150 pour qu'un
-# petit montant reste nettement bleu, distinct des cases vides (gris neutre).
-GAMME_BLEUE = [[0, "#b7d3f6"], [0.25, "#86b6ef"], [0.5, "#3987e5"], [0.75, "#1c5cab"], [1, "#0d366b"]]
+# Gamme séquentielle de la couleur d'Insertion (clair = faible, foncé = élevé) ; elle démarre
+# assez soutenue pour qu'un petit montant reste distinct des cases vides (gris neutre).
+GAMME_INSERTION = [[0, "#F7A1B3"], [0.35, "#E3356A"], [0.7, "#9D174D"], [1, "#6B0F3C"]]
 
 
 def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame, n: int = 40) -> tuple[go.Figure, str]:
@@ -615,7 +606,7 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame, n: int = 40) -> tuple[go
     fig.add_heatmap(z=np.where(vide, 1.0, np.nan), x=x_an, y=etiquettes, meta="vide",
                     colorscale=[[0, L["grid"]], [1, L["grid"]]], showscale=False, xgap=2, ygap=2,
                     customdata=survol, hovertemplate="%{customdata}<extra></extra>", row=1, col=1)
-    fig.add_heatmap(z=lg(val), x=x_an, y=etiquettes, colorscale=GAMME_BLEUE, zmin=zmin, zmax=zmax,
+    fig.add_heatmap(z=lg(val), x=x_an, y=etiquettes, colorscale=GAMME_INSERTION, zmin=zmin, zmax=zmax,
                     xgap=2, ygap=2, customdata=survol, hovertemplate="%{customdata}<extra></extra>",
                     colorbar=dict(title=dict(text="Montant de l'année (échelle log)", side="top"),
                                   orientation="h", x=0.4, xanchor="center", y=-0.01, yanchor="top",
@@ -623,7 +614,7 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame, n: int = 40) -> tuple[go
                                   ticktext=[etiq_ticks[t] for t in ticks], outlinewidth=0),
                     row=1, col=1)
     # Colonne Total, séparée, sur sa propre échelle, avec le montant écrit dans la case
-    fig.add_heatmap(z=lg(tot_col), x=["Total"], y=etiquettes, colorscale=GAMME_BLEUE, showscale=False,
+    fig.add_heatmap(z=lg(tot_col), x=["Total"], y=etiquettes, colorscale=GAMME_INSERTION, showscale=False,
                     xgap=2, ygap=2, text=[[f"{fr(t / 1e3, 0)} k€"] for t in tot_col[:, 0]],
                     texttemplate="%{text}", textfont=dict(size=11),
                     customdata=survol_tot, hovertemplate="%{customdata}<extra></extra>", row=1, col=2)
@@ -951,8 +942,12 @@ section[id] {{ scroll-margin-top: 76px; }}
 .pastille[data-cle="nv"] {{ background: repeating-linear-gradient(135deg, var(--nv) 0 3px, var(--surface) 3px 4.5px); }}
 
 /* Blocs d'évolution */
-.evo-grille {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }}
-.evo {{ border-radius: 18px; padding: 16px 16px 10px; display: flex; flex-direction: column; }}
+.evo-grille {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }}
+.evo {{ border-radius: 18px; padding: 16px 16px 10px; display: flex; flex-direction: column;
+  background: {GRIS_FONCE}; color: #fff; }}
+.evo-t {{ display: flex; gap: 9px; align-items: flex-start; }}
+.evo-t > span:last-child {{ min-width: 0; overflow-wrap: break-word; hyphens: auto; }}
+.evo-t .pastille {{ flex: none; margin-top: .22em; width: 13px; height: 13px; box-shadow: 0 0 0 1.5px rgba(255,255,255,.85); }}
 .evo-t {{ font-size: .98rem; line-height: 1.25; margin: 0 0 10px; min-height: 2.5em; position: relative; }}
 .evo-t small {{ display: block; font-family: {FONT}; font-weight: 400; font-size: .72rem; opacity: .85; margin-top: 2px; }}
 .evo-v {{ font-size: 1.85rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }}
@@ -1018,7 +1013,7 @@ footer a {{ color: inherit; }}
   .onglets [role="tab"] {{ padding: 8px 6px; font-size: .85rem; gap: 6px; text-align: left; }}
 }}
 @media (max-width: 960px) {{
-  .evo-grille {{ grid-template-columns: repeat(3, 1fr); }}
+  .evo-grille {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
   .empile {{ grid-template-columns: 1fr; }}
   .legende {{ columns: 2; column-gap: 24px; }}
   .legende li {{ break-inside: avoid; }}
@@ -1027,7 +1022,7 @@ footer a {{ color: inherit; }}
   .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
   .kpi {{ padding: 12px; }}
   .duo {{ grid-template-columns: 1fr; }}
-  .evo-grille {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }}
+  .evo-grille {{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }}
   .bandeau {{ padding: 22px 18px 20px; border-radius: 18px; }}
   .bandeau h1 {{ font-size: 1.6rem; }}
   .legende {{ columns: 1; }}
@@ -1038,6 +1033,8 @@ footer a {{ color: inherit; }}
   .kpi-l {{ line-height: 1.25; }}
   .evo {{ padding: 14px 12px 8px; }}
   .evo-v {{ font-size: 1.45rem; }}
+  .evo-t {{ font-size: .82rem; gap: 6px; flex-direction: column; }}
+  .evo-t .pastille {{ width: 11px; height: 11px; }}
   .evo-a span:nth-child(2) {{ display: none; }}
 }}
 </style>
@@ -1058,7 +1055,7 @@ footer a {{ color: inherit; }}
 
 <section class="card" id="montants">
   <h2>Montants par année et par politique publique</h2>
-  <p class="sous">En millions d'euros. Total de l'année au-dessus de chaque barre ; dans la légende, le total de chaque politique sur la période. Les Solidarités humaines sont découpées en trois groupes (nuances de bleu) ; « Non ventilé » est hachuré.</p>
+  <p class="sous">En millions d'euros. Total de l'année au-dessus de chaque barre ; dans la légende, le total de chaque politique sur la période. Les Solidarités humaines sont découpées en trois groupes (Enfance et famille, Insertion, Autonomie) ; « Non ventilé » est hachuré.</p>
   <div class="empile"><div>{div['empile']}</div>{legende_empile(t)}</div>
   <details><summary>Voir les données</summary>{table_html(tab_pol)}</details>
 </section>
