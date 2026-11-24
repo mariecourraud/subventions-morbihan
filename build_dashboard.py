@@ -275,8 +275,12 @@ def fig_flux(flux: pd.DataFrame, groupes: list) -> go.Figure:
 
 def section_renouvellement(df: pd.DataFrame) -> tuple[dict, str]:
     """Figures et HTML de la section « Solidarités : renouvellement des bénéficiaires »."""
-    from renouvellement import GROUPES_SH, TOTAL, analyser  # import ici : renouvellement importe ce module
+    # import ici : renouvellement importe ce module
+    from renouvellement import GROUPES_SH, TOTAL, analyser, sans_pluriannuels, synthese
     c, paires, syn, flux, _ = analyser(df)
+    syn_sp = synthese(sans_pluriannuels(c))
+    es = c[(c.politique_affichage != TOTAL) & c.pluriannuel_probable]
+    n_pe, n_ps = int((es.statut == "entrant").sum()), int((es.statut == "sortant").sum())
     a0, a1 = c.attrs["a0"], c.attrs["a1"]
     groupes = [*GROUPES_SH, TOTAL]
     figs = {"taux": fig_taux(syn), "flux": fig_flux(flux, groupes)}
@@ -291,6 +295,19 @@ def section_renouvellement(df: pd.DataFrame) -> tuple[dict, str]:
         "Solde net": [f"{v:+d}".replace("-", "−") for v in syn["solde net"]],
         f"Montant {a1} des entrants": [euros(v) for v in syn[f"montant {a1} des entrants (€)"]],
     })
+    tab_sp = pd.DataFrame({
+        "Groupe": syn_sp.index,
+        "Entrants": [f"{a} → {b}" for a, b in zip(syn["entrants"], syn_sp["entrants"])],
+        "Sortants": [f"{a} → {b}" for a, b in zip(syn["sortants"], syn_sp["sortants"])],
+        "Taux d'entrée": [f"{fr(a)} → {fr(b)} %" for a, b in zip(syn["taux d'entrée (%)"], syn_sp["taux d'entrée (%)"])],
+        "Taux de sortie": [f"{fr(a)} → {fr(b)} %" for a, b in zip(syn["taux de sortie (%)"], syn_sp["taux de sortie (%)"])],
+        "Solde net": [f"{int(a):+d} → {int(b):+d}".replace("-", "−")
+                      for a, b in zip(syn["solde net"], syn_sp["solde net"])],
+    })
+    t_tot, t_sp = syn.loc[TOTAL], syn_sp.loc[TOTAL]
+    solde_av, solde_ap = (f"{int(x):+d}".replace("-", "−") for x in (t_tot["solde net"], t_sp["solde net"]))
+    annees_fse = set(df.loc[df["inclus_totaux"] & (df["objet"] == OBJET_FSE), "annee"])
+    sans_fse = ", ".join(str(a) for a in range(a0, a1 + 1) if a not in annees_fse) or "aucune année"
     tab_flux = flux.pivot(index="annee", columns="groupe", values=["entrants", "sortants"])
     lignes = [{"Année": a, **{f"{g} (entrées / sorties)": f"+{tab_flux.loc[a, ('entrants', g)]} / "
                               f"−{tab_flux.loc[a, ('sortants', g)]}" for g in groupes}}
@@ -309,6 +326,7 @@ def section_renouvellement(df: pd.DataFrame) -> tuple[dict, str]:
       <ul>
         <li><b>Présent</b> : financé en {a0} et en {a1} (des interruptions entre les deux sont possibles). <b>Entrant</b> : première subvention après {a0}, encore financé en {a1}. <b>Sortant</b> : financé dès {a0}, dernière subvention avant {a1}. <b>Ponctuel</b> : arrivé après {a0} et reparti avant {a1}.</li>
         <li><b>Quatre années seulement.</b> On ne sait pas qui était nouveau en {a0} (première année des données), ni qui s'arrêtera après {a1}. {seuls_a1} des {nb_ent} couples entrants (tous groupes) n'apparaissent qu'en {a1} : certains se révéleront ponctuels.</li>
+        <li><b>Financements pluriannuels non identifiables</b> : le fichier ne renseigne ni la période ni les conditions de versement. Un financement pluriannuel ou irrégulier peut créer une fausse entrée ou sortie. {n_pe} entrants et {n_ps} sortants ont un rythme qui le laisse penser (financés une année sur deux ou sur trois, ou une année à plus de 2 fois leur montant médian ; subventions FSE non prises en compte, faute de FSE en {sans_fse}). Sans eux, le taux d'entrée total passe de {fr(t_tot["taux d'entrée (%)"])} % à {fr(t_sp["taux d'entrée (%)"])} %, le taux de sortie de {fr(t_tot["taux de sortie (%)"])} % à {fr(t_sp["taux de sortie (%)"])} % et le solde net de {solde_av} à {solde_ap}.</li>
         <li><b>Petits effectifs</b> : quelques dizaines d'organisations par groupe ; un taux bouge de plusieurs points pour quelques bénéficiaires.</li>
         <li><b>Ces chiffres décrivent qui est financé, pas pourquoi</b> : une sortie peut venir de la fin d'un projet, d'un changement de dispositif ou de financeur, d'une fusion, ou d'un passage dans un autre groupe.</li>
         <li><b>Exclus</b> : tiers anonymisés, montants à 0 €, et {len(paires)} paires entrant/sortant aux noms proches, jugées comme des changements d'identifiant probables (<code>ref/renouvellement_exclusions.csv</code>).</li>
@@ -319,7 +337,8 @@ def section_renouvellement(df: pd.DataFrame) -> tuple[dict, str]:
   <p class="sous">Entrées : première apparition dans l'année (ponctuels compris). Sorties : dernière apparition l'année précédente. Pas d'entrées mesurables en {a0}.</p>
   {{div_flux}}
   <details><summary>Voir les données</summary>{table_html(tab)}{table_html(pd.DataFrame(lignes))}
-  <p class="note">Listes nominatives des entrants, sortants et ponctuels : <code>data/renouvellement_solidarites.csv</code>.</p></details>
+  <p class="note">Avec → sans les entrants et sortants « pluriannuel probable » :</p>{table_html(tab_sp)}
+  <p class="note">Listes nominatives : <code>data/renouvellement_solidarites.csv</code> (entrants, sortants, ponctuels) et <code>data/pluriannuels_solidarites.csv</code> (pluriannuels probables).</p></details>
 </section>"""
     return figs, html
 

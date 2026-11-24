@@ -76,6 +76,7 @@ Requires Python 3, pandas and plotly. To rebuild everything from the raw file:
 python clean.py
 python categorize.py
 python renouvellement.py   # optional: prints the renewal results and writes the named lists
+                           # (renewal and probable multi-year funding)
 python build_dashboard.py
 ```
 
@@ -168,4 +169,13 @@ who receives it. Objects too generic to be classed with certainty are marked *No
   nobody can be called "leaving" in 2023 (last year); 53 of the 89 entering pairs appear in 2023
   only and some will turn out to be one-off. Groups are small (a few dozen organisations), so a
   few beneficiaries move a rate by several points. The figures describe who is funded, not why.
+- Multi-year funding cannot be identified: the source columns `datesPeriodeVersement` and
+  `conditionsVersement` are empty in all 12,514 rows. As a proxy, `renouvellement.py` flags a
+  beneficiary × group pair as *probably multi-year* when it is funded every other year or every
+  third year, or when one year exceeds twice the median of its other years (49 pairs, listed in
+  `data/pluriannuels_solidarites.csv`). FSE grants are ignored for this test because there are
+  none in 2022, which would create false patterns. Without the 10 entering and 6 leaving pairs
+  flagged, the total entry rate falls from 20.0% to 16.8%, the exit rate from 20.9% to 19.8%, and
+  the net balance from −4 to −12. The spike test also catches one-off investment grants (e.g.
+  municipal nurseries), so it flags irregular funding rather than multi-year agreements strictly.
 - Next step: extract 2024–2026 grants from the PDF reports of the Commission permanente.
