@@ -57,7 +57,9 @@ files they read: a policy label outside the grid or an inconsistent renewal excl
 run with an explicit error; a merge pointing to an unknown ID is reported and skipped.
 
 `dashboard.html` is a single self-contained page (plotly embedded, works offline). Each chart has
-a data table underneath, and the page follows the system's light or dark mode.
+a data table underneath, and the page follows the system's light or dark mode. On narrow screens
+(phones), multi-panel charts switch to two columns, long names are shortened (full name on hover)
+and the heatmap drops its type column; the desktop layout comes back when the window widens.
 
 ## What the dashboard shows
 

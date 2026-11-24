@@ -22,6 +22,131 @@ DATE_TELECHARGEMENT = "23 novembre 2026"
 DEPOT_URL = "https://github.com/mariecourraud/subventions-morbihan"
 LIEN_DEPOT = "Méthode, code et limites (GitHub)"
 
+# ---------------------------------------------------------------- Affichage sur écran étroit
+# Script ajouté à la page : sous 600 px de large (téléphone), les graphiques à panneaux passent
+# sur 2 colonnes, les noms longs des axes sont raccourcis (nom complet au survol) et la carte de
+# chaleur masque sa colonne « Type ». Au-delà, la mise en page d'origine est restaurée.
+JS_ECRAN_ETROIT = r"""
+(function () {
+  var SEUIL = 600;
+  var GRILLES = {"fig-multiples": true, "fig-flux": true};   // graphiques à panneaux
+  var NOMS = {"fig-top": 20, "fig-hors_fse": 18};             // longueur max des noms d'axe
+  function court(t, n) { return t.length > n ? t.slice(0, n - 1).trim() + "…" : t; }
+  function recouper(t, n) {   // recoupe un titre en lignes de n caractères au plus
+    var mots = t.replace(/<br>/g, " ").split(" "), lignes = [], l = "";
+    mots.forEach(function (m) { if (l && (l + " " + m).length > n) { lignes.push(l); l = m; } else { l = l ? l + " " + m : m; } });
+    if (l) lignes.push(l);
+    return lignes.join("<br>");
+  }
+  function axes(gd, l) {
+    return Object.keys(gd.layout).filter(function (k) { return new RegExp("^" + l + "axis\\d*$").test(k); })
+      .sort(function (a, b) { return (parseInt(a.slice(5)) || 1) - (parseInt(b.slice(5)) || 1); });
+  }
+  function memoriser(gd) {
+    if (gd._origine) return;
+    var o = {height: gd.layout.height, hauteurBloc: gd.parentElement.style.height,
+             marginL: (gd.layout.margin || {}).l, ann: [], ax: {}};
+    (gd.layout.annotations || []).forEach(function (a) {
+      o.ann.push({x: a.x, y: a.y, visible: a.visible !== false, text: a.text, ax: a.ax, ay: a.ay,
+                  taille: (a.font || {}).size});
+    });
+    axes(gd, "x").concat(axes(gd, "y")).forEach(function (k) {
+      o.ax[k] = {domain: (gd.layout[k].domain || [0, 1]).slice(), showticklabels: gd.layout[k].showticklabels};
+    });
+    gd._origine = o;
+  }
+  function etroit(gd) {
+    var u = {}, o = gd._origine;
+    if (GRILLES[gd.id]) {
+      var xs = axes(gd, "x"), ys = axes(gd, "y"), n = xs.length, lignes = Math.ceil(n / 2);
+      // Titres des panneaux = annotations de tête en coordonnées « paper » (il peut y avoir
+      // moins de titres que d'emplacements, ex. 11 graphiques dans une grille de 12)
+      var nt = 0, an = gd.layout.annotations || [];
+      while (nt < an.length && an[nt].xref === "paper" && an[nt].yref === "paper") nt++;
+      var hP = 150, hT = 78, P = lignes * hP + (lignes - 1) * hT;
+      var m = gd.layout.margin || {};
+      u.height = P + (m.t || 40) + (m.b || 40) + (gd.id === "fig-flux" ? 30 : 0);
+      for (var i = 0; i < n; i++) {
+        var c = i % 2, r = Math.floor(i / 2);
+        var x0 = c * 0.56, x1 = x0 + 0.44, haut = r * (hP + hT), bas = haut + hP;
+        u[xs[i] + ".domain"] = [x0, x1];
+        u[ys[i] + ".domain"] = [1 - bas / P, 1 - haut / P];
+        if (gd.id === "fig-flux") u[ys[i] + ".showticklabels"] = (c === 0);
+        if (i < nt) {   // titre du panneau
+          u["annotations[" + i + "].x"] = (x0 + x1) / 2;
+          u["annotations[" + i + "].y"] = 1 - haut / P;
+          u["annotations[" + i + "].text"] = recouper(o.ann[i].text, 17);
+          u["annotations[" + i + "].font.size"] = 11;
+        }
+      }
+      // Autres annotations (ex. « sans MH ») : décalage en pixels réduit pour rester dans leur panneau
+      for (var j = nt; j < o.ann.length; j++) {
+        if (o.ann[j].ax !== undefined) {
+          u["annotations[" + j + "].ax"] = 8; u["annotations[" + j + "].ay"] = 60;
+          u["annotations[" + j + "].font.size"] = 11;
+        }
+      }
+    }
+    if (NOMS[gd.id]) {
+      var tr = gd.data[gd.data.length > 1 ? 1 : 0], noms = tr.y || [];
+      u["yaxis.tickmode"] = "array"; u["yaxis.tickvals"] = noms;
+      u["yaxis.ticktext"] = noms.map(function (t) { return court(String(t), NOMS[gd.id]); });
+    }
+    if (gd.id === "fig-hors_fse") {
+      u["margin.l"] = 148;
+      u["xaxis.domain"] = [0, 0.62]; u["xaxis2.domain"] = [0.66, 1];   // colonne Total plus large
+      var ans = gd.data[1].x || [];                                     // années abrégées : ’20, ’21…
+      u["xaxis.tickmode"] = "array"; u["xaxis.tickvals"] = ans; u["xaxis.tickangle"] = 0;
+      u["xaxis.ticktext"] = ans.map(function (a) { return "’" + String(a).slice(-2); });
+      (gd.layout.annotations || []).forEach(function (a, i) { u["annotations[" + i + "].visible"] = false; });
+    }
+    return u;
+  }
+  function large(gd) {
+    var u = {}, o = gd._origine;
+    if (GRILLES[gd.id]) {
+      u.height = o.height;
+      Object.keys(o.ax).forEach(function (k) {
+        u[k + ".domain"] = o.ax[k].domain;
+        if (o.ax[k].showticklabels !== undefined) u[k + ".showticklabels"] = o.ax[k].showticklabels;
+      });
+      o.ann.forEach(function (a, i) {
+        u["annotations[" + i + "].x"] = a.x; u["annotations[" + i + "].y"] = a.y;
+        u["annotations[" + i + "].text"] = a.text;
+        if (a.taille !== undefined) u["annotations[" + i + "].font.size"] = a.taille;
+        if (a.ax !== undefined) { u["annotations[" + i + "].ax"] = a.ax; u["annotations[" + i + "].ay"] = a.ay; }
+      });
+    }
+    if (NOMS[gd.id]) { u["yaxis.tickmode"] = "auto"; u["yaxis.tickvals"] = null; u["yaxis.ticktext"] = null; }
+    if (gd.id === "fig-hors_fse") {
+      u["margin.l"] = o.marginL;
+      u["xaxis.domain"] = o.ax.xaxis.domain; u["xaxis2.domain"] = o.ax.xaxis2.domain;
+      u["xaxis.tickmode"] = "auto"; u["xaxis.tickvals"] = null; u["xaxis.ticktext"] = null;
+      u["xaxis.tickangle"] = "auto";
+      o.ann.forEach(function (a, i) { u["annotations[" + i + "].visible"] = a.visible; });
+    }
+    return u;
+  }
+  function adapter() {
+    document.querySelectorAll(".js-plotly-plot").forEach(function (gd) {
+      if (!GRILLES[gd.id] && !NOMS[gd.id]) return;
+      memoriser(gd);
+      var e = gd.parentElement.clientWidth < SEUIL;
+      if (gd._etroit === e) return;
+      gd._etroit = e;
+      var u = e ? etroit(gd) : large(gd);
+      u.width = null; u.autosize = true;   // la largeur suit toujours le bloc (plotly la fige sinon)
+      // plotly enveloppe chaque graphique dans un bloc de hauteur fixe : il doit suivre la nouvelle hauteur
+      if (u.height) gd.parentElement.style.height = e ? u.height + "px" : gd._origine.hauteurBloc;
+      Plotly.relayout(gd, u).then(function () { Plotly.Plots.resize(gd); });   // recale la largeur
+    });
+  }
+  var minuteur;
+  window.addEventListener("load", adapter);
+  window.addEventListener("resize", function () { clearTimeout(minuteur); minuteur = setTimeout(adapter, 200); });
+})();
+"""
+
 # ---------------------------------------------------------------- Palette
 # Palette catégorielle de référence (ordre fixe, validé pour les paires adjacentes),
 # avec une variante claire et une variante sombre. « Non ventilé » est en gris neutre.
@@ -837,6 +962,7 @@ footer a {{ color: inherit; }}
   new MutationObserver(appliquer).observe(document.documentElement, {{ attributes: true, attributeFilter: ["data-theme"] }});
 }})();
 </script>
+<script>{JS_ECRAN_ETROIT}</script>
 </body>
 </html>
 """
