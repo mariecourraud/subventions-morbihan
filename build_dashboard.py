@@ -550,8 +550,13 @@ SYMBOLE_PLURI = "◆"
 GAMME_INSERTION = [[0, "#F7A1B3"], [0.35, "#E3356A"], [0.7, "#9D174D"], [1, "#6B0F3C"]]
 
 
+# Sigles des noms de bénéficiaires, expliqués dans la carte de chaleur
+SIGLES = {
+    "ETCLD": "Expérimentation territoriale contre le chômage de longue durée (Territoires zéro chômeur de longue durée)",
+    "GEM": "groupe d'entraide mutuelle",
+    "TSA": "troubles du spectre de l'autisme",
+}
 PAR_PAGE = 20  # lignes visibles à la fois dans la carte de chaleur (défilement continu au-delà)
-# À FAIRE : menu à onglets pour présenter les autres politiques de solidarité dans cet encart.
 
 
 def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame) -> tuple[go.Figure, str]:
@@ -602,11 +607,19 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame) -> tuple[go.Figure, str]
     ticks = [t for t in range(3, 8) if zmin - 0.3 <= t <= zmax + 0.3]
     etiq_ticks = {3: "1 k€", 4: "10 k€", 5: "100 k€", 6: "1 M€", 7: "10 M€"}
 
-    survol = [[f"<b>{escape(nm)}</b><br>{escape(types[i])}<br>{a} : "
+    # Sigles présents dans les noms : expliqués au survol et dans une note sous le graphique
+    import re
+    def sigles_de(nom: str) -> list:
+        return [sg for sg in SIGLES if re.search(rf"(?<![A-Z]){sg}(?![A-Z])", nom.upper())]
+    trouves = [sg for sg in SIGLES if any(sg in sigles_de(nm) for nm in noms)]
+    sigles_html = ("<p class=\"note\"><b>Sigles :</b> "
+                   + " ; ".join(f"{sg} = {escape(SIGLES[sg])}" for sg in trouves) + ".</p>") if trouves else ""
+    survol_sigles = ["".join(f"<br><i>{sg} : {escape(SIGLES[sg])}</i>" for sg in sigles_de(nm)) for nm in noms]
+    survol = [[f"<b>{escape(nm)}</b>{sg_txt}<br>{escape(types[i])}<br>{a} : "
                + (euros(v) if not np.isnan(v) else "aucune subvention")
                + (f"<br>{SYMBOLE_PLURI} pluriannuel probable : {escape(mo)}" if pr else "")
                for a, v in zip(annees, ligne)]
-              for i, nm, ligne, pr, mo in zip(ids, noms, val, pluri, motif)]
+              for i, nm, ligne, pr, mo, sg_txt in zip(ids, noms, val, pluri, motif, survol_sigles)]
     survol_moy = [[f"<b>{escape(nm)}</b><br>Moyenne par année financée : {euros(m)}"
                    f"<br>soit {euros(t)} sur {k} année{'s' if k > 1 else ''}"]
                   for nm, m, t, k in zip(noms, moy_col, tot_col[:, 0], n_ans)]
@@ -664,10 +677,11 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame) -> tuple[go.Figure, str]
     html = f"""
 <section class="card" id="hors-fse">
   <h2>Insertion – hors FSE : bénéficiaires par année, {annees[0]}–{annees[-1]}</h2>
-  <p class="sous">Subventions du groupe Insertion et développement social dont l'objet n'est pas « {OBJET_FSE} » : les {nb_benef} bénéficiaires nommés ({meur(total_groupe)}), classés par montant moyen par année financée, du plus élevé au plus faible ; {PAR_PAGE} lignes visibles, faites défiler pour voir les autres. Couleur : montant de l'année, du clair (faible) au foncé (élevé), sur une échelle logarithmique ; case grise = aucune subvention cette année-là. Colonne Moyenne : montant moyen par année financée (total du bénéficiaire divisé par le nombre d'années où il a reçu au moins une subvention), sur la même échelle de couleur. {SYMBOLE_PLURI} = pluriannuel probable.</p>
+  <p class="sous">Subventions du groupe Insertion et développement social hors FSE (Fonds social européen, fonds de l'Union européenne en faveur de l'emploi et de l'inclusion, dont le Département gère une partie), c'est-à-dire dont l'objet n'est pas « {OBJET_FSE} » : les {nb_benef} bénéficiaires nommés ({meur(total_groupe)}), classés par montant moyen par année financée, du plus élevé au plus faible ; {PAR_PAGE} lignes visibles, faites défiler pour voir les autres. Couleur : montant de l'année, du clair (faible) au foncé (élevé), sur une échelle logarithmique ; case grise = aucune subvention cette année-là. Colonne Moyenne : montant moyen par année financée (total du bénéficiaire divisé par le nombre d'années où il a reçu au moins une subvention), sur la même échelle de couleur. {SYMBOLE_PLURI} = pluriannuel probable.</p>
+  <p class="sous">Attention : une subvention est enregistrée l'année où elle est votée. Une convention pluriannuelle apparaît donc une seule fois, pour son montant total, et les années suivantes restent vides alors que le financement se poursuit.</p>
   {defilement}
   {{div_hors_fse}}
-  <p class="note">Les montants sont enregistrés l'année de la décision : une convention pluriannuelle apparaît en une seule fois, suivie d'années sans montant, sans que le financement ait cessé.</p>
+  {sigles_html}
   <p class="note">{escape(note_excl)} {SYMBOLE_PLURI} Pluriannuel probable : financé une année sur deux ou sur trois, ou une année à plus de 2 fois son montant médian. Noms raccourcis : nom complet au survol.</p>
 </section>"""
     return fig, html
@@ -1147,7 +1161,7 @@ footer a {{ color: inherit; }}
 
 <section class="card" id="solidarites">
   <h2>Solidarités : principaux bénéficiaires par politique, {a_min}–{a_max}</h2>
-  <p class="sous">Les 10 premiers bénéficiaires de chaque groupe des Solidarités humaines, par montant total : choisissez le groupe avec les onglets. Le groupe Insertion est présenté en deux tableaux (FSE et hors FSE). Une structure qui reçoit les deux types de subventions apparaît dans les deux, avec le montant propre à chacun. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
+  <p class="sous">Les 10 premiers bénéficiaires de chaque groupe des Solidarités humaines, par montant total : choisissez le groupe avec les onglets. Le groupe Insertion est présenté en deux tableaux : FSE (Fonds social européen, fonds de l'Union européenne en faveur de l'emploi et de l'inclusion, dont le Département gère une partie) et hors FSE. Une structure qui reçoit les deux types de subventions apparaît dans les deux, avec le montant propre à chacun. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
   {solidarites_html}
 </section>
 {hors_fse_html}
