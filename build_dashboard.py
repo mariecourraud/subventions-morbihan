@@ -322,11 +322,12 @@ def cartes_evolution(t: pd.DataFrame, comparaisons: dict | None = None) -> str:
 
 
 def legende_empile(t: pd.DataFrame) -> str:
-    """Légende HTML placée à côté du graphique empilé : même ordre que l'empilement
-    (haut en premier), avec le total de la période et la part de chaque politique."""
+    """Légende HTML placée à côté du graphique empilé : politiques classées du plus grand au plus
+    petit montant sur la période (« Non ventilé » en dernier), avec le total et la part de chacune."""
     total = t.values.sum()
     lignes = []
-    for p in reversed([p for p in GROUPES if p in t.index]):
+    pols = sorted([p for p in GROUPES if p in t.index and p != NON_VENTILE], key=lambda p: -t.loc[p].sum())
+    for p in pols + ([NON_VENTILE] if NON_VENTILE in t.index else []):
         s = t.loc[p].sum()
         lignes.append(f'<li><span class="pastille" data-cle="{COULEUR_CLE[p]}"></span>'
                       f'<span class="lg-nom">{escape(libelle(p))}</span>'
