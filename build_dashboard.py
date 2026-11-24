@@ -30,7 +30,7 @@ JS_ECRAN_ETROIT = r"""
 (function () {
   var SEUIL = 600;
   var GRILLES = {"fig-flux": true};   // graphiques à panneaux
-  var NOMS = {"fig-top": 20, "fig-hors_fse": 18};             // longueur max des noms d'axe
+  var NOMS = {"fig-top": 15, "fig-types": 30, "fig-hors_fse": 18};             // longueur max des noms d'axe
   function court(t, n) { return t.length > n ? t.slice(0, n - 1).trim() + "…" : t; }
   function recouper(t, n) {   // recoupe un titre en lignes de n caractères au plus
     var mots = t.replace(/<br>/g, " ").split(" "), lignes = [], l = "";
@@ -91,6 +91,7 @@ JS_ECRAN_ETROIT = r"""
       var tr = gd.data[gd.data.length > 1 ? 1 : 0], noms = tr.y || [];
       u["yaxis.tickmode"] = "array"; u["yaxis.tickvals"] = noms;
       u["yaxis.ticktext"] = noms.map(function (t) { return court(String(t), NOMS[gd.id]); });
+      if (gd.id !== "fig-hors_fse") u["xaxis.showticklabels"] = false;   // montants déjà écrits au bout des barres
     }
     if (gd.id === "fig-hors_fse") {
       u["margin.l"] = 148;
@@ -117,7 +118,10 @@ JS_ECRAN_ETROIT = r"""
         if (a.ax !== undefined) { u["annotations[" + i + "].ax"] = a.ax; u["annotations[" + i + "].ay"] = a.ay; }
       });
     }
-    if (NOMS[gd.id]) { u["yaxis.tickmode"] = "auto"; u["yaxis.tickvals"] = null; u["yaxis.ticktext"] = null; }
+    if (NOMS[gd.id]) {
+      u["yaxis.tickmode"] = "auto"; u["yaxis.tickvals"] = null; u["yaxis.ticktext"] = null;
+      if (gd.id !== "fig-hors_fse") u["xaxis.showticklabels"] = true;
+    }
     if (gd.id === "fig-hors_fse") {
       u["margin.l"] = o.marginL;
       u["xaxis.domain"] = o.ax.xaxis.domain; u["xaxis2.domain"] = o.ax.xaxis2.domain;
@@ -149,17 +153,16 @@ JS_ECRAN_ETROIT = r"""
 
 # ---------------------------------------------------------------- Palette
 # Palette catégorielle de référence (ordre fixe, validé pour les paires adjacentes),
-# avec une variante claire et une variante sombre. « Non ventilé » est en gris neutre.
+# thème clair uniquement. « Non ventilé » est en gris neutre.
 SERIES = {
     "light": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"],
-    "dark":  ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#0ca30c", "#9085e9"],
 }
-GRIS_NV = {"light": "#898781", "dark": "#898781"}
+GRIS_NV = {"light": "#898781"}
+# Gris des graphiques qui ne portent pas sur une politique (les couleurs restent réservées aux politiques)
+GRIS_ACCENT, GRIS_FONCE, GRIS_CLAIR = "#1f1f1d", "#5b5a56", "#bcbab3"
 THEME = {
     "light": dict(surface="#fcfcfb", page="#f9f9f7", ink="#0b0b0b", ink2="#52514e", muted="#898781",
                   grid="#e1e0d9", axis="#c3c2b7", border="rgba(11,11,11,0.10)"),
-    "dark":  dict(surface="#1a1a19", page="#0d0d0d", ink="#f0efec", ink2="#c3c2b7", muted="#898781",
-                  grid="#2c2c2a", axis="#383835", border="rgba(255,255,255,0.10)"),
 }
 # ---------------------------------------------------------------- Groupes d'affichage
 # « Solidarités humaines » est découpée en trois groupes (colonne politique_affichage) ;
@@ -176,7 +179,7 @@ GROUPES = [EF, IDS, AUTONOMIE, *AUTRES, NON_VENTILE]
 # Couleurs : les trois groupes Solidarités sont trois nuances d'un même bleu (ce sont des
 # subdivisions d'une même politique, et la palette n'a que 8 teintes) ; les six autres
 # politiques gardent les teintes 2 à 7 dans l'ordre fixe ; « Non ventilé » reste gris.
-BLEUS = {"light": ["#104281", "#2a78d6", "#86b6ef"], "dark": ["#184f95", "#3987e5", "#9ec5f4"]}
+BLEUS = {"light": ["#104281", "#2a78d6", "#86b6ef"]}
 COULEUR_CLE = ({EF: "b0", IDS: "b1", AUTONOMIE: "b2"}
                | {p: f"s{i + 1}" for i, p in enumerate(AUTRES)} | {NON_VENTILE: "nv"})
 
@@ -243,22 +246,16 @@ def _lum(h: str) -> float:
     return 0.2126 * canal(r) + 0.7152 * canal(g) + 0.0722 * canal(b)
 
 
-def _melange(h: str, t: float) -> str:
-    """Mélange une couleur avec du noir (t = part de noir)."""
-    return "#" + "".join(f"{round(int(h[i:i + 2], 16) * (1 - t)):02x}" for i in (1, 3, 5))
-
-
-def fond_bloc(h: str, contraste: float = 4.6) -> tuple[str, str]:
-    """Couleur de fond assez foncée pour du texte blanc lisible (contraste WCAG ≥ 4,5),
-    et une variante plus sombre pour le dégradé."""
-    t = 0.0
-    while (1.05 / (_lum(_melange(h, t)) + 0.05)) < contraste and t < 0.9:
-        t += 0.02
-    return _melange(h, t), _melange(h, min(t + 0.14, 0.95))
+def encre_sur(fond: str) -> str:
+    """Couleur du texte posé sur un bloc de couleur : blanc s'il est assez lisible
+    (contraste WCAG ≥ 4,5), sinon gris très foncé."""
+    blanc = 1.05 / (_lum(fond) + 0.05)
+    fonce = (_lum(fond) + 0.05) / (_lum("#1a1a19") + 0.05)
+    return "#ffffff" if blanc >= 4.5 or blanc >= fonce else "#1a1a19"
 
 
 def sparkline(v: list, w: list | None = None, annees: list | None = None) -> str:
-    """Petite courbe SVG blanche (valeurs en M€) ; w = courbe de comparaison en pointillés."""
+    """Petite courbe SVG de la couleur du texte du bloc (valeurs en M€) ; w = courbe de comparaison en pointillés."""
     W, H, px, py = 220, 64, 6, 8
     vmax = max(max(v), max(w) if w else 0) or 1
     def pts(s):
@@ -268,17 +265,17 @@ def sparkline(v: list, w: list | None = None, annees: list | None = None) -> str
     ligne = " ".join(f"{x:.1f},{y:.1f}" for x, y in p)
     aire = f"M{p[0][0]:.1f},{H} L" + " L".join(f"{x:.1f},{y:.1f}" for x, y in p) + f" L{p[-1][0]:.1f},{H} Z"
     svg = [f'<svg viewBox="0 0 {W} {H}" class="spark" aria-hidden="true" focusable="false">',
-           f'<path d="{aire}" fill="#fff" fill-opacity=".14"/>']
+           f'<path d="{aire}" fill="currentColor" fill-opacity=".14"/>']
     if w:
         lw = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts(w))
-        svg.append(f'<polyline points="{lw}" fill="none" stroke="#fff" stroke-opacity=".6" '
+        svg.append(f'<polyline points="{lw}" fill="none" stroke="currentColor" stroke-opacity=".6" '
                    'stroke-width="1.6" stroke-dasharray="4 3"/>')
-    svg.append(f'<polyline points="{ligne}" fill="none" stroke="#fff" stroke-width="2.4" '
+    svg.append(f'<polyline points="{ligne}" fill="none" stroke="currentColor" stroke-width="2.4" '
                'stroke-linejoin="round" stroke-linecap="round"/>')
     for i, (x, y) in enumerate(p):
         dernier = i == len(p) - 1
         titre = f"<title>{annees[i]} : {fr(v[i])} M€</title>" if annees else ""
-        svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{4.2 if dernier else 3}" fill="#fff" '
+        svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{4.2 if dernier else 3}" fill="currentColor" '
                    f'fill-opacity="{1 if dernier else .85}">{titre}</circle>')
     svg.append("</svg>")
     return "".join(svg)
@@ -308,7 +305,7 @@ def cartes_evolution(t: pd.DataFrame, comparaisons: dict | None = None) -> str:
     blocs = []
     for p in [p for p in GROUPES_EVOL if p in t.index]:
         v = (t.loc[p] / 1e6).tolist()
-        fond, fond2 = fond_bloc(c[COULEUR_CLE[p]])
+        fond = c[COULEUR_CLE[p]]   # couleur exacte de la politique (comme dans la légende)
         w, extra = None, ""
         if comparaisons and p in comparaisons:
             nom, _, serie = comparaisons[p]
@@ -318,7 +315,7 @@ def cartes_evolution(t: pd.DataFrame, comparaisons: dict | None = None) -> str:
         d = evolution_pct(v[0], v[-1])
         fleche = "" if d == "nouveau" else ("▲" if v[-1] >= v[0] else "▼")
         blocs.append(
-            f'<article class="evo" style="--c1:{fond};--c2:{fond2}">'
+            f'<article class="evo" style="background:{fond};color:{encre_sur(fond)}">'
             f'<h3 class="evo-t">{titre_bloc(libelle(p))}</h3>'
             f'<div class="evo-v">{fr(v[-1])}<span> M€ en {a1}</span></div>'
             f'<div class="evo-d"><span class="puce">{fleche} {d}</span> depuis {a0}</div>'
@@ -394,80 +391,30 @@ def fig_empile(t: pd.DataFrame) -> go.Figure:
     return mise_en_page(fig, 440)
 
 
-def fig_multiples(t: pd.DataFrame, comparaisons: dict | None = None) -> go.Figure:
-    """Un petit graphique par politique publique, chacun avec sa propre échelle."""
-    c = couleurs("light")
-    pols = [p for p in GROUPES_EVOL if p in t.index]
-    ncol = 4
-    nrow = -(-len(pols) // ncol)
-    def titre(p: str, largeur: int = 26) -> str:
-        """Coupe les titres longs sur deux lignes pour éviter les chevauchements."""
-        mots, l1 = libelle(p).split(), ""
-        while mots and len(l1 + " " + mots[0]) <= largeur:
-            l1 = (l1 + " " + mots.pop(0)).strip()
-        return l1 + ("<br>" + " ".join(mots) if mots else "")
-
-    fig = make_subplots(rows=nrow, cols=ncol, subplot_titles=[titre(p) for p in pols],
-                        vertical_spacing=0.2, horizontal_spacing=0.06)
-    annees = [str(a) for a in t.columns]
-    for i, p in enumerate(pols):
-        r, col = i // ncol + 1, i % ncol + 1
-        v = t.loc[p] / 1e6
-        if comparaisons and p in comparaisons:
-            # Courbe de comparaison en gris, tracée SOUS la courbe principale : elle n'apparaît
-            # que là où les deux diffèrent ; étiquette courte au premier écart.
-            nom, court_nom, w = comparaisons[p]
-            w = w.reindex(t.columns, fill_value=0) / 1e6
-            ecart = [k for k, (a, b) in enumerate(zip(v, w)) if abs(a - b) > 0.005]
-            if ecart:
-                # Annotation dans la zone vide sous les courbes, flèche vers le premier écart.
-                # x = rang de la catégorie (une étiquette « 2020 » serait lue comme l'indice 2020).
-                k = ecart[0]
-                fig.add_annotation(x=k, y=w.iloc[k], text=f"{fr(w.iloc[k])} {court_nom}",
-                                   showarrow=True, arrowhead=0, arrowwidth=1, arrowcolor=L["muted"],
-                                   ax=34, ay=48, xanchor="left", font=dict(size=11, color=L["ink2"]),
-                                   row=r, col=col)
-            fig.add_scatter(
-                x=annees, y=w, mode="lines+markers", meta="nv", showlegend=False,
-                line=dict(color=c["nv"], width=2),
-                marker=dict(size=8, color=c["nv"], line=dict(color=L["surface"], width=2)),
-                customdata=[meur(x * 1e6) for x in w],
-                hovertemplate="%{x}<br><b>%{customdata}</b><extra>" + escape(f"{libelle(p)} {nom}") + "</extra>",
-                row=r, col=col,
-            )
-        fig.add_scatter(
-            x=annees, y=v, mode="lines+markers+text", meta=COULEUR_CLE[p], showlegend=False,
-            line=dict(color=c[COULEUR_CLE[p]], width=2),
-            marker=dict(size=8, color=c[COULEUR_CLE[p]], line=dict(color=L["surface"], width=2)),
-            text=[""] * (len(v) - 1) + [fr(v.iloc[-1])], textposition="top center",
-            textfont=dict(color=L["ink2"], size=12),
-            customdata=[meur(x * 1e6) for x in v],
-            hovertemplate="%{x}<br><b>%{customdata}</b><extra>" + escape(libelle(p)) + "</extra>",
-            row=r, col=col,
-        )
-        fig.update_yaxes(rangemode="tozero", range=[0, v.max() * 1.3 or 1], nticks=4, row=r, col=col)
-    fig.update_annotations(font=dict(size=13, color=L["ink"]))
-    fig.update_xaxes(type="category")
-    fig = mise_en_page(fig, 240 * nrow + 40)
-    fig.update_layout(margin=dict(t=40))
-    return fig
-
-
 def fig_barres_h(noms, valeurs, survol, hauteur) -> go.Figure:
-    """Barres horizontales classées, une seule couleur (une seule série)."""
-    c = couleurs("light")
+    """Barres horizontales classées, en gris foncé ; la première (la plus grande) est mise en avant
+    (plus sombre, montant dans une pastille), les autres portent leur montant au bout."""
+    vmax = valeurs.max() / 1e6
+    teintes = [GRIS_ACCENT] + [GRIS_FONCE] * (len(noms) - 1)
     fig = go.Figure(go.Bar(
-        y=noms, x=valeurs / 1e6, orientation="h", meta="s0",
-        marker=dict(color=c["s0"], line=dict(color=L["surface"], width=2)),
-        text=[meur(v) for v in valeurs], textposition="outside", cliponaxis=False,
-        textfont=dict(color=L["ink2"]),
+        y=noms, x=valeurs / 1e6, orientation="h", showlegend=False,
+        marker=dict(color=teintes, line=dict(width=0)),
+        text=[""] + [meur(v) for v in valeurs[1:]], textposition="outside", cliponaxis=False,
+        textfont=dict(color=L["ink2"], size=12),
         customdata=survol, hovertemplate="<b>%{y}</b><br>%{customdata}<extra></extra>",
     ))
-    fig.update_layout(bargap=0.35, barcornerradius=4)
-    fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False,
-                     range=[0, valeurs.max() / 1e6 * 1.22])
-    fig.update_yaxes(autorange="reversed", tickfont=dict(color=L["ink2"]), automargin=True)
-    return mise_en_page(fig, hauteur)
+    fig.add_annotation(x=vmax, y=noms[0], text=f"<b>{meur(valeurs.iloc[0])}</b>", showarrow=False,
+                       xanchor="left", xshift=8, bgcolor=GRIS_ACCENT, borderpad=4,
+                       font=dict(color="#ffffff", size=12))
+    fig.update_layout(bargap=0.38, barcornerradius=3)
+    fig.update_xaxes(showgrid=True, gridcolor=L["grid"], zeroline=False, showline=False,
+                     ticksuffix=" M€", nticks=5, range=[0, vmax * 1.02])
+    fig.update_yaxes(autorange="reversed", tickfont=dict(color=L["ink2"], size=13), automargin=True,
+                     showline=False, ticks="outside", ticklen=8, tickcolor="rgba(0,0,0,0)")
+    fig = mise_en_page(fig, hauteur)
+    fig.update_yaxes(showgrid=False)
+    fig.update_layout(margin=dict(r=80))   # marge fixe pour les montants, quelle que soit la largeur
+    return fig
 
 
 # ---------------------------------------------------------------- Solidarités : renouvellement
@@ -480,21 +427,21 @@ def court(g: str) -> str:
 
 def fig_taux(syn: pd.DataFrame) -> go.Figure:
     """Taux d'entrée et de sortie par groupe (rapportés aux bénéficiaires de 2020)."""
-    c = couleurs("light")
     groupes = list(syn.index)
     fig = go.Figure()
-    for col, nom, cle, eff in [("taux d'entrée (%)", "Taux d'entrée", "s0", "entrants"),
-                               ("taux de sortie (%)", "Taux de sortie", "s1", "sortants")]:
+    # Entrées / sorties en gris (foncé / clair) : les couleurs restent réservées aux politiques
+    for col, nom, teinte, eff in [("taux d'entrée (%)", "Taux d'entrée", GRIS_FONCE, "entrants"),
+                                  ("taux de sortie (%)", "Taux de sortie", GRIS_CLAIR, "sortants")]:
         fig.add_bar(
-            y=[court(g) for g in groupes], x=syn[col], name=nom, orientation="h", meta=cle,
-            marker=dict(color=c[cle], line=dict(color=L["surface"], width=2)),
+            y=[court(g) for g in groupes], x=syn[col], name=nom, orientation="h",
+            marker=dict(color=teinte, line=dict(color=L["surface"], width=2)),
             text=[f"{fr(v)} %" for v in syn[col]], textposition="outside", cliponaxis=False,
             textfont=dict(color=L["ink2"]),
             customdata=[f"{int(n)} {eff} sur {int(b)} bénéficiaires en 2020"
                         for n, b in zip(syn[eff], syn.iloc[:, 0])],
             hovertemplate="<b>" + nom + " : %{x:.1f} %</b><br>%{customdata}<extra></extra>",
         )
-    fig.update_layout(barmode="group", bargap=0.3, bargroupgap=0.08, barcornerradius=4,
+    fig.update_layout(barmode="group", bargap=0.3, bargroupgap=0.08, barcornerradius=3,
                       legend=dict(orientation="h", y=-0.08, x=0, font=dict(color=L["ink2"])))
     fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False,
                      range=[0, max(syn["taux d'entrée (%)"].max(), syn["taux de sortie (%)"].max()) * 1.2])
@@ -504,21 +451,20 @@ def fig_taux(syn: pd.DataFrame) -> go.Figure:
 
 def fig_flux(flux: pd.DataFrame, groupes: list) -> go.Figure:
     """Entrées (au-dessus de zéro) et sorties (en dessous) par année, un panneau par groupe."""
-    c = couleurs("light")
     fig = make_subplots(rows=1, cols=len(groupes), shared_yaxes=True, horizontal_spacing=0.03,
                         subplot_titles=[court(g).replace("<b>", "").replace("</b>", "") for g in groupes])
     for i, g in enumerate(groupes, 1):
         x = flux[flux.groupe == g]
         annees = [str(a) for a in x.annee]
-        for col, nom, cle, signe in [("entrants", "Entrées", "s0", 1), ("sortants", "Sorties", "s1", -1)]:
+        for col, nom, teinte, signe in [("entrants", "Entrées", GRIS_FONCE, 1), ("sortants", "Sorties", GRIS_CLAIR, -1)]:
             fig.add_bar(
-                x=annees, y=signe * x[col], name=nom, meta=cle, showlegend=(i == 1), legendgroup=nom,
-                marker=dict(color=c[cle], line=dict(color=L["surface"], width=2)),
+                x=annees, y=signe * x[col], name=nom, showlegend=(i == 1), legendgroup=nom,
+                marker=dict(color=teinte, line=dict(color=L["surface"], width=2)),
                 customdata=x[col],
                 hovertemplate="%{x} · " + nom + " : <b>%{customdata}</b><extra>" + escape(g) + "</extra>",
                 row=1, col=i,
             )
-    fig.update_layout(barmode="relative", bargap=0.35, barcornerradius=4,
+    fig.update_layout(barmode="relative", bargap=0.35, barcornerradius=3,
                       legend=dict(orientation="h", y=-0.15, x=0, font=dict(color=L["ink2"])))
     fig.update_xaxes(type="category")
     # Axe en valeurs absolues : les sorties sont sous zéro mais restent des effectifs positifs
@@ -577,7 +523,7 @@ def section_renouvellement(df: pd.DataFrame) -> tuple[dict, str]:
     seuls_a1 = int(((c.statut == "entrant") & (c.premiere == a1) & (c.politique_affichage != TOTAL)).sum())
     nb_ent = int(((c.statut == "entrant") & (c.politique_affichage != TOTAL)).sum())
     html = f"""
-<section class="card">
+<section class="card" id="renouvellement">
   <h2>Solidarités : renouvellement des bénéficiaires, {a0}–{a1}</h2>
   <p class="sous">Unité : le couple bénéficiaire × groupe. Une organisation financée dans deux groupes compte dans chacun ; la ligne « Total » la compte une seule fois.</p>
   <div class="duo">
@@ -702,7 +648,7 @@ def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame, n: int = 40) -> tuple[go
                     else " (aucun dans ce sous-groupe)")
                  + f" et les montants à 0 € ({zeros} subvention{'s' if zeros > 1 else ''}).")
     html = f"""
-<section class="card">
+<section class="card" id="hors-fse">
   <h2>Insertion – hors FSE : les {len(p)} premiers bénéficiaires par année, {annees[0]}–{annees[-1]}</h2>
   <p class="sous">Subventions du groupe Insertion et développement social dont l'objet n'est pas « {OBJET_FSE} ». Couleur : montant de l'année, du clair (faible) au foncé (élevé), sur une échelle logarithmique ; case grise = aucune subvention cette année-là. Colonne Total sur sa propre échelle. {SYMBOLE_PLURI} = pluriannuel probable. Ces {len(p)} bénéficiaires représentent {fr(p['Total'].sum() / total_groupe * 100)} % des {meur(total_groupe)} du sous-groupe ({nb_benef} bénéficiaires nommés).</p>
   {{div_hors_fse}}
@@ -892,8 +838,6 @@ def main() -> None:
                         f'<div role="tablist" aria-label="Groupe des Solidarités humaines">{boutons}</div>'
                         f'{panneaux}</div>')
 
-    # Thème sombre : couleurs des séries et de l'habillage, appliquées par script
-    theme_js = {m: dict(**THEME[m], series=couleurs(m)) for m in THEME}
 
     nb_ans = a_max - a_min + 1
     icones = {
@@ -915,14 +859,11 @@ def main() -> None:
         f'<div class="kpi-v">{v}</div><div class="kpi-s">{escape(s)}</div></div>'
         for i, v, l, s in kpis)
 
-    # Variables CSS de chaque thème (couleurs des séries, habillage, bandeau gris)
+    # Variables CSS (couleurs des séries, habillage, bandeau gris) ; thème clair uniquement
     BANDEAU = {
         "light": dict(band1="#f3f2ee", band2="#e2e0da", tile="rgba(255,255,255,.72)",
                       tileb="rgba(255,255,255,.95)", iconbg="#3b3b38", iconfg="#ffffff",
                       ombre="0 1px 2px rgba(20,20,10,.04), 0 6px 20px rgba(20,20,10,.05)"),
-        "dark": dict(band1="#2b2b29", band2="#1d1d1b", tile="rgba(255,255,255,.05)",
-                     tileb="rgba(255,255,255,.09)", iconbg="#e6e5e0", iconfg="#1a1a19",
-                     ombre="0 1px 2px rgba(0,0,0,.3)"),
     }
     def vars_css(m: str) -> str:
         th, b, s = THEME[m], BANDEAU[m], couleurs(m)
@@ -945,10 +886,6 @@ def main() -> None:
 <script>{get_plotlyjs()}</script>
 <style>
 :root {{ color-scheme: light; {vars_css('light')} }}
-@media (prefers-color-scheme: dark) {{
-  :root:not([data-theme="light"]) {{ color-scheme: dark; {vars_css('dark')} }}
-}}
-:root[data-theme="dark"] {{ color-scheme: dark; {vars_css('dark')} }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; background: var(--page); color: var(--ink); font-family: {FONT}; line-height: 1.55; font-size: 15px; }}
 h1, h2, h3, .h3 {{ font-family: {FONT_TITRE}; font-weight: 700; letter-spacing: -.005em; }}
@@ -962,10 +899,6 @@ main {{ max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }}
   background: radial-gradient(circle, rgba(255,255,255,.55), rgba(255,255,255,0) 70%); }}
 .bandeau::before {{ width: 420px; height: 420px; right: -120px; top: -180px; }}
 .bandeau::after {{ width: 260px; height: 260px; right: 220px; bottom: -170px; opacity: .6; }}
-:root[data-theme="dark"] .bandeau::before, :root[data-theme="dark"] .bandeau::after {{ opacity: .06; }}
-@media (prefers-color-scheme: dark) {{
-  :root:not([data-theme="light"]) .bandeau::before, :root:not([data-theme="light"]) .bandeau::after {{ opacity: .06; }}
-}}
 .bandeau > * {{ position: relative; }}
 .bandeau h1 {{ font-size: 2.1rem; line-height: 1.2; margin: 0 0 8px; max-width: 820px; }}
 .bandeau .chapeau {{ margin: 0; color: var(--ink2); max-width: 820px; }}
@@ -984,6 +917,21 @@ main {{ max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }}
 .kpi-l {{ color: var(--ink2); font-size: .85rem; font-weight: 500; }}
 .kpi-v {{ font-size: 2rem; font-weight: 600; margin-top: 10px; line-height: 1.1; font-variant-numeric: tabular-nums; }}
 .kpi-s {{ color: var(--muted); font-size: .8rem; margin-top: 4px; }}
+
+/* Sommaire */
+html {{ scroll-behavior: smooth; }}
+@media (prefers-reduced-motion: reduce) {{ html {{ scroll-behavior: auto; }} }}
+section[id] {{ scroll-margin-top: 76px; }}
+.sommaire {{ position: sticky; top: 10px; z-index: 10; display: flex; gap: 4px; overflow-x: auto;
+  scrollbar-width: none; margin: 0 0 18px; padding: 6px; border-radius: 999px;
+  background: rgba(252,252,251,.88); backdrop-filter: blur(8px); border: 1px solid var(--border); box-shadow: var(--ombre); }}
+.sommaire::-webkit-scrollbar {{ display: none; }}
+.sommaire a {{ flex: none; padding: 6px 14px; border-radius: 999px; font-size: .84rem; font-weight: 500;
+  color: var(--ink2); text-decoration: none; white-space: nowrap; }}
+.sommaire a:hover {{ background: var(--band1); color: var(--ink); }}
+.sommaire a.actif {{ background: {GRIS_ACCENT}; color: #fff; }}
+.sommaire a:focus-visible {{ outline: 2px solid {GRIS_ACCENT}; outline-offset: 2px; }}
+@media print {{ .sommaire {{ display: none; }} }}
 
 /* Cartes */
 .card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--ombre);
@@ -1004,19 +952,16 @@ main {{ max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }}
 
 /* Blocs d'évolution */
 .evo-grille {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }}
-.evo {{ position: relative; overflow: hidden; overflow: clip; color: #fff; border-radius: 18px; padding: 16px 16px 10px;
-  background: linear-gradient(140deg, var(--c1), var(--c2)); display: flex; flex-direction: column; }}
-.evo::after {{ content: ""; position: absolute; width: 160px; height: 160px; right: -60px; top: -70px;
-  border-radius: 50%; background: rgba(255,255,255,.10); pointer-events: none; }}
+.evo {{ border-radius: 18px; padding: 16px 16px 10px; display: flex; flex-direction: column; }}
 .evo-t {{ font-size: .98rem; line-height: 1.25; margin: 0 0 10px; min-height: 2.5em; position: relative; }}
 .evo-t small {{ display: block; font-family: {FONT}; font-weight: 400; font-size: .72rem; opacity: .85; margin-top: 2px; }}
 .evo-v {{ font-size: 1.85rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }}
 .evo-v span {{ font-size: .78rem; font-weight: 400; opacity: .85; }}
 .evo-d {{ font-size: .78rem; margin-top: 8px; opacity: .95; }}
-.puce {{ display: inline-block; padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.2);
+.puce {{ display: inline-block; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, currentColor 16%, transparent);
   font-weight: 600; margin-right: 2px; }}
 .evo-x {{ font-size: .74rem; margin-top: 6px; opacity: .9; display: flex; align-items: center; gap: 6px; }}
-.tiret {{ width: 16px; border-top: 2px dashed rgba(255,255,255,.75); }}
+.tiret {{ width: 16px; border-top: 2px dashed currentColor; opacity: .75; }}
 .spark {{ display: block; width: 100%; height: auto; margin-top: auto; padding-top: 10px; overflow: visible; }}
 .evo-a {{ display: flex; justify-content: space-between; font-size: .7rem; opacity: .8; margin-top: 2px; }}
 .duo {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
@@ -1058,8 +1003,8 @@ footer a {{ color: inherit; }}
   color: var(--ink2); background: none; border: 0; border-bottom: 3px solid transparent;
   padding: 8px 12px; margin-bottom: -1px; cursor: pointer; border-radius: 6px 6px 0 0; }}
 .onglets [role="tab"]:hover {{ color: var(--ink); background: var(--page); }}
-.onglets [role="tab"][aria-selected="true"] {{ color: var(--ink); font-weight: 650; border-bottom-color: var(--b0); }}
-.onglets [role="tab"]:focus-visible {{ outline: 2px solid var(--b0); outline-offset: 2px; }}
+.onglets [role="tab"][aria-selected="true"] {{ color: var(--ink); font-weight: 650; border-bottom-color: var(--ink); }}
+.onglets [role="tab"]:focus-visible {{ outline: 2px solid var(--ink); outline-offset: 2px; }}
 .onglets.actifs .panneau[hidden] {{ display: none; }}
 .onglets.actifs .bloc-sol {{ margin-top: 12px; }}
 .onglets.actifs .bloc-sol h3 {{ display: none; }}
@@ -1107,14 +1052,18 @@ footer a {{ color: inherit; }}
   <section class="kpis" aria-label="Chiffres clés">{kpi_html}</section>
 </header>
 
-<section class="card">
+<nav class="sommaire" aria-label="Sommaire">
+  <a href="#montants">Montants</a><a href="#evolution">Évolution</a><a href="#types">Types de bénéficiaires</a><a href="#limites">Limites</a><a href="#top15">15 premiers</a><a href="#solidarites">Solidarités</a><a href="#hors-fse">Insertion hors FSE</a><a href="#renouvellement">Renouvellement</a>
+</nav>
+
+<section class="card" id="montants">
   <h2>Montants par année et par politique publique</h2>
   <p class="sous">En millions d'euros. Total de l'année au-dessus de chaque barre ; dans la légende, le total de chaque politique sur la période. Les Solidarités humaines sont découpées en trois groupes (nuances de bleu) ; « Non ventilé » est hachuré.</p>
   <div class="empile"><div>{div['empile']}</div>{legende_empile(t)}</div>
   <details><summary>Voir les données</summary>{table_html(tab_pol)}</details>
 </section>
 
-<section class="card">
+<section class="card" id="evolution">
   <h2>Évolution de chaque politique publique, {a_min}–{a_max}</h2>
   <p class="sous">Montant de la dernière année et évolution depuis {a_min}. Attention : chaque courbe a sa propre échelle, pour rendre lisibles les petites politiques ; comparez les montants, pas les hauteurs (survolez un point pour son montant). Le groupe Insertion est séparé en deux selon l'objet de chaque subvention : fonds européens (FSE) et hors FSE.</p>
   {cartes_evolution(t_evol, {AUTONOMIE: ("sans Morbihan Habitat", "sans MH", auto_sans_mh)})}
@@ -1124,14 +1073,14 @@ footer a {{ color: inherit; }}
 </section>
 
 <div class="duo">
-<section class="card">
+<section class="card" id="types">
   <h2>Répartition par type de bénéficiaire</h2>
   <p class="sous">Montant total sur la période. Type déduit du nom du bénéficiaire.</p>
   {div['types']}
   <details><summary>Voir les données</summary>{table_html(tab_types)}</details>
 </section>
 
-<section class="card qualite">
+<section class="card qualite" id="limites">
   <h2>Qualité des données et limites</h2>
   <ul>
     <li><b>Montants à 0 € exclus :</b> {zeros} subventions à 0 € sont retirées des totaux et des comptages.</li>
@@ -1144,14 +1093,14 @@ footer a {{ color: inherit; }}
 </section>
 </div>
 
-<section class="card">
+<section class="card" id="top15">
   <h2>Les 15 premiers bénéficiaires, {a_min}–{a_max}</h2>
   <p class="sous">Montant total reçu sur la période, après fusion des identifiants.</p>
   {div['top']}
   <details><summary>Voir les données</summary>{table_html(tab_top)}</details>
 </section>
 
-<section class="card">
+<section class="card" id="solidarites">
   <h2>Solidarités : principaux bénéficiaires, {a_min}–{a_max}</h2>
   <p class="sous">Les 10 premiers bénéficiaires de chaque groupe des Solidarités humaines, par montant total : choisissez le groupe avec les onglets. Le groupe Insertion est présenté en deux tableaux (FSE et hors FSE). Une structure qui reçoit les deux types de subventions apparaît dans les deux, avec le montant propre à chacun. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
   {solidarites_html}
@@ -1168,47 +1117,36 @@ footer a {{ color: inherit; }}
 </main>
 <script>
 (function () {{
-  var T = {pd.Series(theme_js).to_json(force_ascii=False)};
-  function mode() {{
-    var t = document.documentElement.getAttribute("data-theme");
-    if (t === "dark" || t === "light") return t;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }}
-  function appliquer() {{
-    var th = T[mode()];
-    document.querySelectorAll(".js-plotly-plot").forEach(function (gd) {{
-      var lay = {{ paper_bgcolor: th.surface, plot_bgcolor: th.surface, "font.color": th.ink2 }};
-      Object.keys(gd.layout).forEach(function (k) {{
-        if (/^[xy]axis\\d*$/.test(k)) {{
-          lay[k + ".gridcolor"] = th.grid; lay[k + ".linecolor"] = th.axis;
-          lay[k + ".zerolinecolor"] = th.axis; lay[k + ".tickfont.color"] = th.muted;
-        }}
-      }});
-      (gd.layout.annotations || []).forEach(function (a, i) {{
-        if (a.name === "pastille") {{ lay["annotations[" + i + "].bgcolor"] = th.ink; lay["annotations[" + i + "].font.color"] = th.surface; }}
-        else lay["annotations[" + i + "].font.color"] = th.ink;
-      }});
-      if (gd.layout.legend) lay["legend.font.color"] = th.ink2;
-      Plotly.relayout(gd, lay);
-      gd.data.forEach(function (tr, i) {{
-        if (tr.meta === "vide") {{ Plotly.restyle(gd, {{ colorscale: [[[0, th.grid], [1, th.grid]]] }}, [i]); return; }}
-        var c = th.series[tr.meta];
-        if (!c) return;
-        var s = {{ "marker.color": c, "marker.line.color": th.surface }};
-        if (tr.marker && tr.marker.pattern && tr.marker.pattern.shape) s["marker.pattern.fgcolor"] = th.surface;
-        if (tr.type === "scatter") {{ s["line.color"] = c; s["textfont.color"] = th.ink2; }}
-        else {{ s["textfont.color"] = th.ink2; }}
-        Plotly.restyle(gd, s, [i]);
-      }});
-    }});
-  }}
-  window.addEventListener("load", appliquer);
   // Police Poppins chargée après coup : les graphiques recalculent la place de leurs textes
   if (document.fonts) document.fonts.ready.then(function () {{
     document.querySelectorAll(".js-plotly-plot").forEach(function (gd) {{ Plotly.Plots.resize(gd); }});
   }});
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", appliquer);
-  new MutationObserver(appliquer).observe(document.documentElement, {{ attributes: true, attributeFilter: ["data-theme"] }});
+  // Sommaire : met en avant la section en cours de lecture
+  var liens = Array.prototype.slice.call(document.querySelectorAll(".sommaire a"));
+  if (!("IntersectionObserver" in window) || !liens.length) return;
+  var visibles = {{}}, pause = 0;
+  function marquer(id) {{
+    liens.forEach(function (a) {{
+      var on = a.getAttribute("href") === "#" + id;
+      a.classList.toggle("actif", on);
+      if (on) {{ a.setAttribute("aria-current", "true"); a.scrollIntoView({{ block: "nearest", inline: "nearest" }}); }}
+      else a.removeAttribute("aria-current");
+    }});
+  }}
+  var obs = new IntersectionObserver(function (entrees) {{
+    entrees.forEach(function (e) {{ visibles[e.target.id] = e.isIntersecting; }});
+    if (Date.now() < pause) return;
+    // Première section visible dans l'ordre du sommaire (deux blocs côte à côte : celui de gauche)
+    for (var i = 0; i < liens.length; i++) {{
+      var id = liens[i].getAttribute("href").slice(1);
+      if (visibles[id]) {{ marquer(id); return; }}
+    }}
+  }}, {{ rootMargin: "-25% 0px -55% 0px" }});
+  liens.forEach(function (a) {{
+    var cible = document.querySelector(a.getAttribute("href"));
+    if (cible) obs.observe(cible);
+    a.addEventListener("click", function () {{ pause = Date.now() + 1200; marquer(a.getAttribute("href").slice(1)); }});
+  }});
 }})();
 </script>
 <script>
