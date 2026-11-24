@@ -34,19 +34,44 @@ THEME = {
     "dark":  dict(surface="#1a1a19", page="#0d0d0d", ink="#f0efec", ink2="#c3c2b7", muted="#898781",
                   grid="#2c2c2a", axis="#383835", border="rgba(255,255,255,0.10)"),
 }
-POLITIQUES = [*GRILLE, NON_VENTILE]
-COULEUR_CLE = {p: f"s{i}" for i, p in enumerate(GRILLE)} | {NON_VENTILE: "nv"}
+# ---------------------------------------------------------------- Groupes d'affichage
+# « Solidarités humaines » est découpée en trois groupes (colonne politique_affichage) ;
+# politique_publique et politique_sectorielle ne sont pas modifiées.
+SH = "SOLIDARITÉS HUMAINES"
+_SECT = {ps.split(" (")[0]: ps for ps in GRILLE[SH]}
+EF, IDS = "Enfance et famille", "Insertion et développement social"
+AUTONOMIE = "Autonomie (personnes âgées et personnes handicapées)"
+SH_GROUPES = {_SECT["Enfance et famille"]: EF, _SECT["Insertion et développement social"]: IDS,
+              _SECT["Personnes âgées"]: AUTONOMIE, _SECT["Personnes handicapées"]: AUTONOMIE}
+AUTRES = [p for p in GRILLE if p != SH]
+GROUPES = [EF, IDS, AUTONOMIE, *AUTRES, NON_VENTILE]
+
+# Couleurs : les trois groupes Solidarités sont trois nuances d'un même bleu (ce sont des
+# subdivisions d'une même politique, et la palette n'a que 8 teintes) ; les six autres
+# politiques gardent les teintes 2 à 7 dans l'ordre fixe ; « Non ventilé » reste gris.
+BLEUS = {"light": ["#104281", "#2a78d6", "#86b6ef"], "dark": ["#184f95", "#3987e5", "#9ec5f4"]}
+COULEUR_CLE = ({EF: "b0", IDS: "b1", AUTONOMIE: "b2"}
+               | {p: f"s{i + 1}" for i, p in enumerate(AUTRES)} | {NON_VENTILE: "nv"})
 
 
 def couleurs(mode: str) -> dict:
     c = {f"s{i}": h for i, h in enumerate(SERIES[mode])}
+    c |= {f"b{i}": h for i, h in enumerate(BLEUS[mode])}
     c["nv"] = GRIS_NV[mode]
     return c
 
 
+def politique_affichage(df: pd.DataFrame) -> pd.Series:
+    sh = df["politique_publique"] == SH
+    groupe = df.loc[sh, "politique_sectorielle"].map(SH_GROUPES)
+    if groupe.isna().any():
+        raise ValueError(f"Politiques sectorielles non prévues : {set(df.loc[sh][groupe.isna()]['politique_sectorielle'])}")
+    return df["politique_publique"].where(~sh, groupe)
+
+
 def libelle(p: str) -> str:
-    """« SOLIDARITÉS HUMAINES » -> « Solidarités humaines »."""
-    return p if p == NON_VENTILE else p[0] + p[1:].lower()
+    """« SOLIDARITÉ DES TERRITOIRES » -> « Solidarité des territoires » (les autres inchangés)."""
+    return p[0] + p[1:].lower() if p.isupper() else p
 
 
 def fr(x: float, d: int = 1) -> str:
@@ -90,7 +115,7 @@ def fig_empile(t: pd.DataFrame) -> go.Figure:
     c = couleurs("light")
     fig = go.Figure()
     annees = [str(a) for a in t.columns]
-    for p in POLITIQUES:
+    for p in GROUPES:
         if p not in t.index:
             continue
         v = t.loc[p]
@@ -115,10 +140,17 @@ def fig_empile(t: pd.DataFrame) -> go.Figure:
 def fig_multiples(t: pd.DataFrame) -> go.Figure:
     """Un petit graphique par politique publique, chacun avec sa propre échelle."""
     c = couleurs("light")
-    pols = [p for p in POLITIQUES if p in t.index]
+    pols = [p for p in GROUPES if p in t.index]
     ncol = 4
     nrow = -(-len(pols) // ncol)
-    fig = make_subplots(rows=nrow, cols=ncol, subplot_titles=[libelle(p) for p in pols],
+    def titre(p: str, largeur: int = 26) -> str:
+        """Coupe les titres longs sur deux lignes pour éviter les chevauchements."""
+        mots, l1 = libelle(p).split(), ""
+        while mots and len(l1 + " " + mots[0]) <= largeur:
+            l1 = (l1 + " " + mots.pop(0)).strip()
+        return l1 + ("<br>" + " ".join(mots) if mots else "")
+
+    fig = make_subplots(rows=nrow, cols=ncol, subplot_titles=[titre(p) for p in pols],
                         vertical_spacing=0.2, horizontal_spacing=0.06)
     annees = [str(a) for a in t.columns]
     for i, p in enumerate(pols):
@@ -137,7 +169,9 @@ def fig_multiples(t: pd.DataFrame) -> go.Figure:
         fig.update_yaxes(rangemode="tozero", range=[0, v.max() * 1.3 or 1], nticks=4, row=r, col=col)
     fig.update_annotations(font=dict(size=13, color=L["ink"]))
     fig.update_xaxes(type="category")
-    return mise_en_page(fig, 220 * nrow + 40)
+    fig = mise_en_page(fig, 240 * nrow + 40)
+    fig.update_layout(margin=dict(t=40))
+    return fig
 
 
 def fig_barres_h(noms, valeurs, survol, hauteur) -> go.Figure:
@@ -157,10 +191,58 @@ def fig_barres_h(noms, valeurs, survol, hauteur) -> go.Figure:
     return mise_en_page(fig, hauteur)
 
 
+# ---------------------------------------------------------------- Solidarités : principaux bénéficiaires
+ANONYME = "Tiers anonymisé"
+
+
+def euros(x: float) -> str:
+    return f"{fr(x, 0)} €"
+
+
+def bloc_solidarites(tot: pd.DataFrame, groupe: str, n: int = 10) -> str:
+    """Tableau des n premiers bénéficiaires d'un groupe Solidarités.
+    Un bénéficiaire = un identifiant (après fusion) sous son nom d'affichage.
+    Les « Tiers anonymisé » sont exclus (ils ne forment pas un bénéficiaire unique) et signalés."""
+    s = tot[tot["politique_affichage"] == groupe]
+    anon = s["nom_affichage"] == ANONYME
+    nommes = s[~anon]
+    cle = ["idBeneficiaire", "nom_affichage"]
+    # Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe
+    par_objet = nommes.groupby(cle + ["objet"])["montant"].sum().reset_index()
+    objet_principal = (par_objet.sort_values("montant", ascending=False)
+                       .drop_duplicates(cle).set_index(cle)["objet"])
+    top = (nommes.groupby(cle)
+           .agg(type=("type_beneficiaire", "first"), subventions=("id", "size"),
+                montant=("montant", "sum"))
+           .join(objet_principal)
+           .sort_values("montant", ascending=False).head(n).reset_index())
+    tableau = pd.DataFrame({
+        "Rang": range(1, len(top) + 1),
+        "Bénéficiaire": top["nom_affichage"],
+        "Type": top["type"],
+        "Subventions": [fr(x, 0) for x in top["subventions"]],
+        "Montant total": [euros(x) for x in top["montant"]],
+        "Objet principal": top["objet"],
+    })
+    part_top = top["montant"].sum() / s["montant"].sum() * 100
+    note = (f"Ces {len(top)} bénéficiaires reçoivent {fr(part_top)} % des {meur(s['montant'].sum())} du groupe "
+            f"({fr(len(s), 0)} subventions, {fr(nommes['idBeneficiaire'].nunique(), 0)} bénéficiaires nommés).")
+    if anon.any():
+        n_sub, n_id = int(anon.sum()), s.loc[anon, "idBeneficiaire"].nunique()
+        pl = lambda n, mot: f"{fr(n, 0)} {mot}{'s' if n > 1 else ''}"
+        note += (f" Non {'listées' if n_sub > 1 else 'listée'} : {pl(n_sub, 'subvention')} à des tiers anonymisés "
+                 f"({euros(s.loc[anon, 'montant'].sum())}, {pl(n_id, 'identifiant')}), "
+                 "qui ne peuvent pas être additionnés comme un seul bénéficiaire.")
+    return (f'<div class="bloc-sol"><h3><span class="pastille" data-cle="{COULEUR_CLE[groupe]}"></span>'
+            f'{escape(groupe)}</h3><div class="table-scroll">{table_html(tableau)}</div>'
+            f'<p class="note">{escape(note)}</p></div>')
+
+
 # ---------------------------------------------------------------- Programme principal
 def main() -> None:
     df = pd.read_csv(SOURCE, sep=";", encoding="utf-8-sig",
                      dtype={"idBeneficiaire": str, "idBeneficiaire_original": str, "id": str})
+    df["politique_affichage"] = politique_affichage(df)
     tot = df[df["inclus_totaux"]]
 
     # Chiffres clés
@@ -170,9 +252,9 @@ def main() -> None:
     a_min, a_max = tot["annee"].min(), tot["annee"].max()
 
     # Données des graphiques
-    t = tot.pivot_table(index="politique_publique", columns="annee", values="montant",
+    t = tot.pivot_table(index="politique_affichage", columns="annee", values="montant",
                         aggfunc="sum", fill_value=0)
-    t = t.loc[[p for p in POLITIQUES if p in t.index]]
+    t = t.loc[[p for p in GROUPES if p in t.index]]
 
     types = (tot.groupby("type_beneficiaire")
              .agg(montant=("montant", "sum"), subventions=("id", "size"),
@@ -220,7 +302,7 @@ def main() -> None:
     tab_pol = tab_pol.map(lambda x: fr(x / 1e6))
     tab_pol["Part"] = [f"{fr(x)} %" for x in part]
     tab_pol.index = [libelle(p) for p in tab_pol.index]
-    tab_pol = tab_pol.reset_index().rename(columns={"index": "Politique publique (M€)"})
+    tab_pol = tab_pol.reset_index().rename(columns={"index": "Politique (M€)"})
     tab_pol.columns = [str(c) for c in tab_pol.columns]
 
     tab_types = pd.DataFrame({
@@ -237,6 +319,8 @@ def main() -> None:
         "Montant (M€)": [fr(x / 1e6) for x in top["montant"]],
         "Subventions": [fr(x, 0) for x in top["subventions"]],
     })
+
+    solidarites_html = "".join(bloc_solidarites(tot, g) for g in (EF, IDS, AUTONOMIE))
 
     # Thème sombre : couleurs des séries et de l'habillage, appliquées par script
     theme_js = {m: dict(**THEME[m], series=couleurs(m)) for m in THEME}
@@ -262,6 +346,7 @@ def main() -> None:
   color-scheme: light;
   --page: {L['page']}; --surface: {L['surface']}; --ink: {L['ink']}; --ink2: {L['ink2']};
   --muted: {L['muted']}; --grid: {L['grid']}; --border: {L['border']};
+  --b0: {BLEUS['light'][0]}; --b1: {BLEUS['light'][1]}; --b2: {BLEUS['light'][2]};
 }}
 @media (prefers-color-scheme: dark) {{
   :root:not([data-theme="light"]) {{
@@ -269,6 +354,7 @@ def main() -> None:
     --page: {THEME['dark']['page']}; --surface: {THEME['dark']['surface']}; --ink: {THEME['dark']['ink']};
     --ink2: {THEME['dark']['ink2']}; --muted: {THEME['dark']['muted']}; --grid: {THEME['dark']['grid']};
     --border: {THEME['dark']['border']};
+    --b0: {BLEUS['dark'][0]}; --b1: {BLEUS['dark'][1]}; --b2: {BLEUS['dark'][2]};
   }}
 }}
 :root[data-theme="dark"] {{
@@ -276,6 +362,7 @@ def main() -> None:
   --page: {THEME['dark']['page']}; --surface: {THEME['dark']['surface']}; --ink: {THEME['dark']['ink']};
   --ink2: {THEME['dark']['ink2']}; --muted: {THEME['dark']['muted']}; --grid: {THEME['dark']['grid']};
   --border: {THEME['dark']['border']};
+  --b0: {BLEUS['dark'][0]}; --b1: {BLEUS['dark'][1]}; --b2: {BLEUS['dark'][2]};
 }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; background: var(--page); color: var(--ink); font-family: {FONT}; line-height: 1.5; }}
@@ -300,6 +387,20 @@ td:not(:first-child), th:not(:first-child) {{ text-align: right; }}
 .qualite {{ border-left: 4px solid var(--muted); }}
 .qualite ul {{ margin: 8px 0; padding-left: 20px; }}
 .qualite li {{ margin-bottom: 6px; }}
+.bloc-sol {{ margin: 16px 0 24px; }}
+.bloc-sol h3 {{ font-size: 1rem; margin: 0 0 4px; font-weight: 650; display: flex; align-items: center; gap: 8px; }}
+.bloc-sol table {{ font-size: .9rem; }}
+.bloc-sol td, .bloc-sol th {{ text-align: left; vertical-align: top; }}
+.bloc-sol td:nth-child(1), .bloc-sol th:nth-child(1),
+.bloc-sol td:nth-child(4), .bloc-sol th:nth-child(4),
+.bloc-sol td:nth-child(5), .bloc-sol th:nth-child(5) {{ text-align: right; white-space: nowrap; }}
+.bloc-sol td:nth-child(6) {{ color: var(--ink2); }}
+.pastille {{ width: 12px; height: 12px; border-radius: 3px; display: inline-block; }}
+.pastille[data-cle="b0"] {{ background: var(--b0); }}
+.pastille[data-cle="b1"] {{ background: var(--b1); }}
+.pastille[data-cle="b2"] {{ background: var(--b2); }}
+.note {{ color: var(--ink2); font-size: .85rem; margin: 6px 0 0; }}
+.table-scroll {{ overflow-x: auto; }}
 footer {{ color: var(--ink2); font-size: .85rem; margin-top: 24px; }}
 footer a {{ color: inherit; }}
 @media (max-width: 760px) {{
@@ -319,7 +420,7 @@ footer a {{ color: inherit; }}
 
 <section class="card">
   <h2>Montants par année et par politique publique</h2>
-  <p class="sous">En millions d'euros. Total de l'année au-dessus de chaque barre.</p>
+  <p class="sous">En millions d'euros. Total de l'année au-dessus de chaque barre. Les Solidarités humaines sont découpées en trois groupes (nuances de bleu).</p>
   {div['empile']}
   <details><summary>Voir les données</summary>{table_html(tab_pol)}</details>
 </section>
@@ -344,6 +445,7 @@ footer a {{ color: inherit; }}
     <li><b>Montants à 0 € exclus :</b> {zeros} subventions à 0 € sont retirées des totaux et des comptages.</li>
     <li><b>Fusions d'identifiants :</b> {int(fus.sum())} subventions ont été rattachées à un autre identifiant ({df.loc[fus, 'idBeneficiaire_original'].nunique()} identifiants fusionnés), après vérification au cas par cas des organismes enregistrés sous plusieurs identifiants.</li>
     <li><b>« Non ventilé » :</b> {meur(nv)}, soit {fr(nv / montant * 100)} % du total ({nv_objets} objets sur {nb_objets}). L'intitulé de ces subventions est trop générique pour les rattacher à une politique sans deviner (principalement {nv_exemples}).</li>
+    <li><b>Affichage des Solidarités humaines :</b> pour la lecture, la politique publique est découpée en trois groupes (Enfance et famille ; Insertion et développement social ; Autonomie, qui réunit Personnes âgées et Personnes handicapées). La classification officielle n'est pas modifiée.</li>
     <li><b>Grille appliquée après coup :</b> la segmentation stratégique en vigueur au 1<sup>er</sup> janvier 2025 est appliquée rétroactivement aux subventions votées de {a_min} à {a_max}, d'après l'objet de chaque subvention.</li>
     <li><b>Type de bénéficiaire :</b> déduit du nom ; {meur(tot.loc[tot['type_beneficiaire'] == 'Autre', 'montant'].sum())} restent en « Autre » faute d'indice dans le nom.</li>
   </ul>
@@ -355,6 +457,12 @@ footer a {{ color: inherit; }}
   <p class="sous">Montant total reçu sur la période, après fusion des identifiants.</p>
   {div['top']}
   <details><summary>Voir les données</summary>{table_html(tab_top)}</details>
+</section>
+
+<section class="card">
+  <h2>Solidarités : principaux bénéficiaires, {a_min}–{a_max}</h2>
+  <p class="sous">Les 10 premiers bénéficiaires de chacun des trois groupes des Solidarités humaines, par montant total. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
+  {solidarites_html}
 </section>
 
 <footer>

@@ -40,8 +40,14 @@ left out of totals.
 
 `build_dashboard.py` writes `dashboard.html`, a single self-contained page (plotly embedded, works
 offline) in French: key figures, amounts by year and public policy, one small chart per policy,
-breakdown by beneficiary type, top 15 beneficiaries, and a data quality and limitations box. Each
-chart has a data table underneath.
+breakdown by beneficiary type, top 15 beneficiaries, the top 10 beneficiaries of each solidarity
+group, and a data quality and limitations box. Each chart has a data table underneath.
+
+For display only, the dashboard splits *Solidarités humaines* into three groups
+(`politique_affichage`): *Enfance et famille*, *Insertion et développement social*, and
+*Autonomie* (Personnes âgées + Personnes handicapées). The official `politique_publique` and
+`politique_sectorielle` columns are unchanged. In the solidarity tables, anonymised beneficiaries
+are left out (and counted in a note) rather than summed as if they were one organisation.
 
 Requires Python 3, pandas and plotly. To rebuild everything from the raw file:
 
