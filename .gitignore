@@ -40,3 +40,6 @@ desktop.ini
 
 # --- Configuration locale de Claude Code ---
 .claude/
+
+# --- Documents de référence non publics (gardés en local, hors dépôt) ---
+ref/*.pdf
