@@ -191,6 +191,121 @@ def fig_barres_h(noms, valeurs, survol, hauteur) -> go.Figure:
     return mise_en_page(fig, hauteur)
 
 
+# ---------------------------------------------------------------- Solidarités : renouvellement
+def court(g: str) -> str:
+    """Libellé court pour les axes : « Autonomie (personnes âgées… » -> « Autonomie<br>(PA et PH) »."""
+    return {"Autonomie (personnes âgées et personnes handicapées)": "Autonomie<br>(pers. âgées et handicapées)",
+            "Insertion et développement social": "Insertion et<br>développement social",
+            "Total solidarités humaines": "<b>Total solidarités<br>humaines</b>"}.get(g, g)
+
+
+def fig_taux(syn: pd.DataFrame) -> go.Figure:
+    """Taux d'entrée et de sortie par groupe (rapportés aux bénéficiaires de 2020)."""
+    c = couleurs("light")
+    groupes = list(syn.index)
+    fig = go.Figure()
+    for col, nom, cle, eff in [("taux d'entrée (%)", "Taux d'entrée", "s0", "entrants"),
+                               ("taux de sortie (%)", "Taux de sortie", "s1", "sortants")]:
+        fig.add_bar(
+            y=[court(g) for g in groupes], x=syn[col], name=nom, orientation="h", meta=cle,
+            marker=dict(color=c[cle], line=dict(color=L["surface"], width=2)),
+            text=[f"{fr(v)} %" for v in syn[col]], textposition="outside", cliponaxis=False,
+            textfont=dict(color=L["ink2"]),
+            customdata=[f"{int(n)} {eff} sur {int(b)} bénéficiaires en 2020"
+                        for n, b in zip(syn[eff], syn.iloc[:, 0])],
+            hovertemplate="<b>" + nom + " : %{x:.1f} %</b><br>%{customdata}<extra></extra>",
+        )
+    fig.update_layout(barmode="group", bargap=0.3, bargroupgap=0.08, barcornerradius=4,
+                      legend=dict(orientation="h", y=-0.08, x=0, font=dict(color=L["ink2"])))
+    fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False,
+                     range=[0, max(syn["taux d'entrée (%)"].max(), syn["taux de sortie (%)"].max()) * 1.2])
+    fig.update_yaxes(autorange="reversed", tickfont=dict(color=L["ink2"]), automargin=True)
+    return mise_en_page(fig, 400)
+
+
+def fig_flux(flux: pd.DataFrame, groupes: list) -> go.Figure:
+    """Entrées (au-dessus de zéro) et sorties (en dessous) par année, un panneau par groupe."""
+    c = couleurs("light")
+    fig = make_subplots(rows=1, cols=len(groupes), shared_yaxes=True, horizontal_spacing=0.03,
+                        subplot_titles=[court(g).replace("<b>", "").replace("</b>", "") for g in groupes])
+    for i, g in enumerate(groupes, 1):
+        x = flux[flux.groupe == g]
+        annees = [str(a) for a in x.annee]
+        for col, nom, cle, signe in [("entrants", "Entrées", "s0", 1), ("sortants", "Sorties", "s1", -1)]:
+            fig.add_bar(
+                x=annees, y=signe * x[col], name=nom, meta=cle, showlegend=(i == 1), legendgroup=nom,
+                marker=dict(color=c[cle], line=dict(color=L["surface"], width=2)),
+                customdata=x[col],
+                hovertemplate="%{x} · " + nom + " : <b>%{customdata}</b><extra>" + escape(g) + "</extra>",
+                row=1, col=i,
+            )
+    fig.update_layout(barmode="relative", bargap=0.35, barcornerradius=4,
+                      legend=dict(orientation="h", y=-0.15, x=0, font=dict(color=L["ink2"])))
+    fig.update_xaxes(type="category")
+    # Axe en valeurs absolues : les sorties sont sous zéro mais restent des effectifs positifs
+    m = int(max(flux["entrants"].max(), flux["sortants"].max()))
+    pas = 20 if m > 40 else 10
+    ticks = list(range(-((m // pas) + 1) * pas, ((m // pas) + 1) * pas + 1, pas))
+    fig.update_yaxes(zeroline=True, zerolinewidth=1, tickvals=ticks, ticktext=[str(abs(t)) for t in ticks],
+                     range=[ticks[0], ticks[-1]])
+    fig.update_yaxes(title_text="Bénéficiaires", title_font=dict(color=L["muted"]), row=1, col=1)
+    fig.update_annotations(font=dict(size=12, color=L["ink"]))
+    fig = mise_en_page(fig, 340)
+    fig.update_layout(margin=dict(t=56))
+    return fig
+
+
+def section_renouvellement(df: pd.DataFrame) -> tuple[dict, str]:
+    """Figures et HTML de la section « Solidarités : renouvellement des bénéficiaires »."""
+    from renouvellement import GROUPES_SH, TOTAL, analyser  # import ici : renouvellement importe ce module
+    c, paires, syn, flux, _ = analyser(df)
+    a0, a1 = c.attrs["a0"], c.attrs["a1"]
+    groupes = [*GROUPES_SH, TOTAL]
+    figs = {"taux": fig_taux(syn), "flux": fig_flux(flux, groupes)}
+
+    tab = pd.DataFrame({
+        "Groupe": syn.index,
+        f"Bénéf. {a0}": syn[f"bénéficiaires {a0}"],
+        "Présents toute la période": syn["présents toute la période"],
+        "Entrants": syn["entrants"], "Sortants": syn["sortants"], "Ponctuels": syn["ponctuels"],
+        "Taux d'entrée": [f"{fr(v)} %" for v in syn["taux d'entrée (%)"]],
+        "Taux de sortie": [f"{fr(v)} %" for v in syn["taux de sortie (%)"]],
+        "Solde net": [f"{v:+d}".replace("-", "−") for v in syn["solde net"]],
+        f"Montant {a1} des entrants": [euros(v) for v in syn[f"montant {a1} des entrants (€)"]],
+    })
+    tab_flux = flux.pivot(index="annee", columns="groupe", values=["entrants", "sortants"])
+    lignes = [{"Année": a, **{f"{g} (entrées / sorties)": f"+{tab_flux.loc[a, ('entrants', g)]} / "
+                              f"−{tab_flux.loc[a, ('sortants', g)]}" for g in groupes}}
+              for a in tab_flux.index]
+
+    seuls_a1 = int(((c.statut == "entrant") & (c.premiere == a1) & (c.politique_affichage != TOTAL)).sum())
+    nb_ent = int(((c.statut == "entrant") & (c.politique_affichage != TOTAL)).sum())
+    html = f"""
+<section class="card">
+  <h2>Solidarités : renouvellement des bénéficiaires, {a0}–{a1}</h2>
+  <p class="sous">Unité : le couple bénéficiaire × groupe. Une organisation financée dans deux groupes compte dans chacun ; la ligne « Total » la compte une seule fois.</p>
+  <div class="duo">
+    <div><h3 class="h3">Taux d'entrée et de sortie</h3><p class="sous">Rapportés aux bénéficiaires de {a0}.</p>{{div_taux}}</div>
+    <div class="encadre">
+      <h3 class="h3">Définitions et limites</h3>
+      <ul>
+        <li><b>Présent</b> : financé en {a0} et en {a1} (des interruptions entre les deux sont possibles). <b>Entrant</b> : première subvention après {a0}, encore financé en {a1}. <b>Sortant</b> : financé dès {a0}, dernière subvention avant {a1}. <b>Ponctuel</b> : arrivé après {a0} et reparti avant {a1}.</li>
+        <li><b>Quatre années seulement.</b> On ne sait pas qui était nouveau en {a0} (première année des données), ni qui s'arrêtera après {a1}. {seuls_a1} des {nb_ent} couples entrants (tous groupes) n'apparaissent qu'en {a1} : certains se révéleront ponctuels.</li>
+        <li><b>Petits effectifs</b> : quelques dizaines d'organisations par groupe ; un taux bouge de plusieurs points pour quelques bénéficiaires.</li>
+        <li><b>Ces chiffres décrivent qui est financé, pas pourquoi</b> : une sortie peut venir de la fin d'un projet, d'un changement de dispositif ou de financeur, d'une fusion, ou d'un passage dans un autre groupe.</li>
+        <li><b>Exclus</b> : tiers anonymisés, montants à 0 €, et {len(paires)} paires entrant/sortant aux noms proches, jugées comme des changements d'identifiant probables (<code>ref/renouvellement_exclusions.csv</code>).</li>
+      </ul>
+    </div>
+  </div>
+  <h3 class="h3">Entrées et sorties par année</h3>
+  <p class="sous">Entrées : première apparition dans l'année (ponctuels compris). Sorties : dernière apparition l'année précédente. Pas d'entrées mesurables en {a0}.</p>
+  {{div_flux}}
+  <details><summary>Voir les données</summary>{table_html(tab)}{table_html(pd.DataFrame(lignes))}
+  <p class="note">Listes nominatives des entrants, sortants et ponctuels : <code>data/renouvellement_solidarites.csv</code>.</p></details>
+</section>"""
+    return figs, html
+
+
 # ---------------------------------------------------------------- Solidarités : principaux bénéficiaires
 ANONYME = "Tiers anonymisé"
 
@@ -290,9 +405,12 @@ def main() -> None:
             top["nom"].tolist(), top["montant"],
             [f"{escape(r.type)} · {fr(r.subventions, 0)} subventions" for r in top.itertuples()], 560),
     }
+    figs_renouv, renouv_html = section_renouvellement(df)
+    figs |= figs_renouv
     config = dict(displayModeBar=False, responsive=True)
     div = {k: f.to_html(full_html=False, include_plotlyjs=False, div_id=f"fig-{k}", config=config)
            for k, f in figs.items()}
+    renouv_html = renouv_html.replace("{div_taux}", div["taux"]).replace("{div_flux}", div["flux"])
 
     # Tableaux (équivalent accessible de chaque graphique)
     tab_pol = t.copy()
@@ -401,6 +519,11 @@ td:not(:first-child), th:not(:first-child) {{ text-align: right; }}
 .pastille[data-cle="b2"] {{ background: var(--b2); }}
 .note {{ color: var(--ink2); font-size: .85rem; margin: 6px 0 0; }}
 .table-scroll {{ overflow-x: auto; }}
+.h3 {{ font-size: 1rem; margin: 12px 0 2px; font-weight: 650; }}
+.encadre {{ border-left: 4px solid var(--muted); padding: 4px 0 4px 16px; font-size: .9rem; }}
+.encadre ul {{ margin: 8px 0; padding-left: 18px; }}
+.encadre li {{ margin-bottom: 6px; }}
+code {{ font-size: .85em; }}
 footer {{ color: var(--ink2); font-size: .85rem; margin-top: 24px; }}
 footer a {{ color: inherit; }}
 @media (max-width: 760px) {{
@@ -464,6 +587,7 @@ footer a {{ color: inherit; }}
   <p class="sous">Les 10 premiers bénéficiaires de chacun des trois groupes des Solidarités humaines, par montant total. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
   {solidarites_html}
 </section>
+{renouv_html}
 
 <footer>
   Source : Département du Morbihan, « Subventions aux personnes morales », data.gouv.fr, Licence Ouverte —

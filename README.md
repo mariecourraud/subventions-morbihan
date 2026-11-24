@@ -41,7 +41,22 @@ left out of totals.
 `build_dashboard.py` writes `dashboard.html`, a single self-contained page (plotly embedded, works
 offline) in French: key figures, amounts by year and public policy, one small chart per policy,
 breakdown by beneficiary type, top 15 beneficiaries, the top 10 beneficiaries of each solidarity
-group, and a data quality and limitations box. Each chart has a data table underneath.
+group, beneficiary renewal in the solidarity groups, and a data quality and limitations box. Each
+chart has a data table underneath.
+
+`renouvellement.py` measures beneficiary renewal in the three solidarity groups. The unit is the
+pair beneficiary × group; the total line counts each organisation once. From each pair's first and
+last year: *present* (2020 and 2023), *entering* (after 2020, still funded in 2023), *leaving*
+(funded in 2020, last grant before 2023), *one-off* (after 2020, gone before 2023). It also writes
+the named lists of entering, leaving and one-off beneficiaries to `data/renouvellement_solidarites.csv`.
+
+| 2020–2023 | Enfance et famille | Insertion et dév. social | Autonomie | Total |
+|---|--:|--:|--:|--:|
+| Beneficiaries in 2020 | 196 | 72 | 182 | 406 |
+| Present all period | 166 | 52 | 129 | 321 |
+| Entering / leaving | 45 / 30 | 12 / 20 | 32 / 53 | 81 / 85 |
+| Entry rate / exit rate | 23.0% / 15.3% | 16.7% / 27.8% | 17.6% / 29.1% | 20.0% / 20.9% |
+| Net balance | +15 | −8 | −21 | −4 |
 
 For display only, the dashboard splits *Solidarités humaines* into three groups
 (`politique_affichage`): *Enfance et famille*, *Insertion et développement social*, and
@@ -54,6 +69,7 @@ Requires Python 3, pandas and plotly. To rebuild everything from the raw file:
 ```
 python clean.py
 python categorize.py
+python renouvellement.py   # optional: prints the renewal results and writes the named lists
 python build_dashboard.py
 ```
 
@@ -113,6 +129,11 @@ who receives it. Objects too generic to be classed with certainty are marked *No
   They cover 664 grants and €17.6 M. The unallocated share falls from 9.5% (€39.6 M) to 5.3%
   (€22.0 M).
 
+- **Renewal analysis:** no entering/leaving pair had an identical normalised name within a group.
+  Among pairs with *similar* names, I judged 6 to be probable identifier changes and excluded them
+  from the renewal counts (`ref/renouvellement_exclusions.csv`), and kept the others as distinct
+  organisations (e.g. retirees' clubs from different towns).
+
 ## Use of AI
 
 ### What Claude Code did
@@ -137,4 +158,8 @@ who receives it. Objects too generic to be classed with certainty are marked *No
   financières).
 - The beneficiary type comes from the name only: 1,870 rows (€59.2 M) stay *Other*, mostly
   associations whose name gives no clue.
+- Renewal rests on four years only: nobody can be called "new" in 2020 (first year of data), and
+  nobody can be called "leaving" in 2023 (last year); 53 of the 89 entering pairs appear in 2023
+  only and some will turn out to be one-off. Groups are small (a few dozen organisations), so a
+  few beneficiaries move a rate by several points. The figures describe who is funded, not why.
 - Next step: extract 2024–2026 grants from the PDF reports of the Commission permanente.
