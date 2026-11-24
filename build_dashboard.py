@@ -551,6 +551,7 @@ GAMME_INSERTION = [[0, "#F7A1B3"], [0.35, "#E3356A"], [0.7, "#9D174D"], [1, "#6B
 
 
 PAR_PAGE = 20  # lignes visibles à la fois dans la carte de chaleur (défilement continu au-delà)
+# À FAIRE : menu à onglets pour présenter les autres politiques de solidarité dans cet encart.
 
 
 def carte_hors_fse(df: pd.DataFrame, tot: pd.DataFrame) -> tuple[go.Figure, str]:
@@ -927,17 +928,38 @@ main {{ max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }}
 /* Sommaire */
 html {{ scroll-behavior: smooth; }}
 @media (prefers-reduced-motion: reduce) {{ html {{ scroll-behavior: auto; }} }}
-section[id] {{ scroll-margin-top: 76px; }}
-.sommaire {{ position: sticky; top: 10px; z-index: 10; display: flex; gap: 4px; overflow-x: auto;
-  scrollbar-width: none; margin: 0 0 18px; padding: 6px; border-radius: 999px;
-  background: rgba(252,252,251,.88); backdrop-filter: blur(8px); border: 1px solid var(--border); box-shadow: var(--ombre); }}
-.sommaire::-webkit-scrollbar {{ display: none; }}
-.sommaire a {{ flex: none; padding: 6px 14px; border-radius: 999px; font-size: .84rem; font-weight: 500;
-  color: var(--ink2); text-decoration: none; white-space: nowrap; }}
-.sommaire a:hover {{ background: var(--band1); color: var(--ink); }}
-.sommaire a.actif {{ background: {GRIS_ACCENT}; color: #fff; }}
-.sommaire a:focus-visible {{ outline: 2px solid {GRIS_ACCENT}; outline-offset: 2px; }}
+section[id] {{ scroll-margin-top: 80px; }}
+.sommaire {{ position: sticky; top: 10px; z-index: 20; display: flex; flex-wrap: wrap; justify-content: center;
+  align-items: center; gap: 4px; margin: 0 0 18px; padding: 6px; border-radius: 999px;
+  background: rgba(252,252,251,.9); backdrop-filter: blur(8px); border: 1px solid var(--border); box-shadow: var(--ombre); }}
+.som-groupe {{ position: relative; }}
+.som-btn {{ display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .86rem; font-weight: 500;
+  color: var(--ink2); background: none; border: 0; padding: 7px 16px; border-radius: 999px; cursor: pointer;
+  text-decoration: none; white-space: nowrap; }}
+.som-btn:hover, .som-btn[aria-expanded="true"] {{ background: var(--band1); color: var(--ink); }}
+.som-btn.actif {{ background: {GRIS_ACCENT}; color: #fff; }}
+.som-btn:focus-visible, .som-menu a:focus-visible {{ outline: 2px solid {GRIS_ACCENT}; outline-offset: 2px; }}
+.som-fleche {{ width: 7px; height: 7px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
+  transform: translateY(-2px) rotate(45deg); transition: transform .15s; }}
+.som-btn[aria-expanded="true"] .som-fleche {{ transform: translateY(1px) rotate(-135deg); }}
+.som-menu {{ position: absolute; top: calc(100% + 8px); left: 0; min-width: 230px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(20,20,10,.12); display: flex; flex-direction: column; gap: 2px; }}
+.som-menu[hidden] {{ display: none; }}
+.som-groupe:last-child .som-menu {{ left: auto; right: 0; }}
+.som-menu a {{ padding: 8px 12px; border-radius: 9px; font-size: .86rem; color: var(--ink2); text-decoration: none; white-space: nowrap; }}
+.som-menu a:hover {{ background: var(--band1); color: var(--ink); }}
+.som-menu a.actif {{ color: var(--ink); font-weight: 600; background: var(--band1); }}
 @media print {{ .sommaire {{ display: none; }} }}
+@media (max-width: 520px) {{
+  .sommaire {{ flex-wrap: nowrap; gap: 0; padding: 5px; }}
+  .som-long {{ display: none; }}
+  .som-btn {{ font-size: .8rem; padding: 6px 9px; gap: 5px; }}
+  /* Menus ouverts sur toute la largeur de la barre, sous elle */
+  .som-groupe {{ position: static; }}
+  .som-menu, .som-groupe:last-child .som-menu {{ left: 6px; right: 6px; min-width: 0; transform: none; }}
+  .som-menu a {{ white-space: normal; }}
+}}
 
 /* Défilement de la carte de chaleur */
 .defil {{ display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; font-size: .86rem; color: var(--ink2); }}
@@ -1076,7 +1098,10 @@ footer a {{ color: inherit; }}
 </header>
 
 <nav class="sommaire" aria-label="Sommaire">
-  <a href="#montants">Montants</a><a href="#evolution">Évolution</a><a href="#types">Types de bénéficiaires</a><a href="#limites">Limites</a><a href="#top15">15 premiers</a><a href="#solidarites">Solidarités</a><a href="#hors-fse">Insertion hors FSE</a><a href="#renouvellement">Renouvellement</a>
+  <div class="som-groupe"><button type="button" class="som-btn" aria-expanded="false" aria-controls="som-depense">Dépense<span class="som-long">&nbsp;globale</span><span class="som-fleche" aria-hidden="true"></span></button><div class="som-menu" id="som-depense" hidden><a href="#montants">Montants</a><a href="#evolution">Évolution</a></div></div>
+  <div class="som-groupe"><button type="button" class="som-btn" aria-expanded="false" aria-controls="som-benef">Bénéficiaires<span class="som-fleche" aria-hidden="true"></span></button><div class="som-menu" id="som-benef" hidden><a href="#types">Typologie</a><a href="#top15">Principaux bénéficiaires</a></div></div>
+  <div class="som-groupe"><a class="som-btn" href="#limites">Limites</a></div>
+  <div class="som-groupe"><button type="button" class="som-btn" aria-expanded="false" aria-controls="som-solid">Solidarités<span class="som-fleche" aria-hidden="true"></span></button><div class="som-menu" id="som-solid" hidden><a href="#solidarites">Principaux bénéficiaires par politique</a><a href="#hors-fse">Bénéficiaires par année</a><a href="#renouvellement">Renouvellement des bénéficiaires</a></div></div>
 </nav>
 
 <section class="card" id="montants">
@@ -1097,8 +1122,8 @@ footer a {{ color: inherit; }}
 
 <div class="duo">
 <section class="card" id="types">
-  <h2>Répartition par type de bénéficiaire</h2>
-  <p class="sous">Montant total sur la période. Type déduit du nom du bénéficiaire.</p>
+  <h2>Répartition par typologie de bénéficiaires</h2>
+  <p class="sous">Montant total sur la période. Typologie déduite du nom du bénéficiaire.</p>
   {div['types']}
   <details><summary>Voir les données</summary>{table_html(tab_types)}</details>
 </section>
@@ -1117,14 +1142,14 @@ footer a {{ color: inherit; }}
 </div>
 
 <section class="card" id="top15">
-  <h2>Les 15 premiers bénéficiaires, {a_min}–{a_max}</h2>
-  <p class="sous">Montant total reçu sur la période, après fusion des identifiants.</p>
+  <h2>Principaux bénéficiaires, {a_min}–{a_max}</h2>
+  <p class="sous">Les 15 premiers bénéficiaires, par montant total reçu sur la période, après fusion des identifiants.</p>
   {div['top']}
   <details><summary>Voir les données</summary>{table_html(tab_top)}</details>
 </section>
 
 <section class="card" id="solidarites">
-  <h2>Solidarités : principaux bénéficiaires, {a_min}–{a_max}</h2>
+  <h2>Solidarités : principaux bénéficiaires par politique, {a_min}–{a_max}</h2>
   <p class="sous">Les 10 premiers bénéficiaires de chaque groupe des Solidarités humaines, par montant total : choisissez le groupe avec les onglets. Le groupe Insertion est présenté en deux tableaux (FSE et hors FSE). Une structure qui reçoit les deux types de subventions apparaît dans les deux, avec le montant propre à chacun. Objet principal : celui qui représente le plus gros montant pour ce bénéficiaire dans le groupe.</p>
   {solidarites_html}
 </section>
@@ -1144,18 +1169,49 @@ footer a {{ color: inherit; }}
   if (document.fonts) document.fonts.ready.then(function () {{
     document.querySelectorAll(".js-plotly-plot").forEach(function (gd) {{ Plotly.Plots.resize(gd); }});
   }});
-  // Sommaire : met en avant la section en cours de lecture
+  // Sommaire : menus déroulants (clic, Échap, clic ailleurs) et section en cours de lecture
+  var boutons = Array.prototype.slice.call(document.querySelectorAll(".sommaire button.som-btn"));
+  function fermer(sauf) {{
+    boutons.forEach(function (b) {{
+      if (b === sauf) return;
+      b.setAttribute("aria-expanded", "false");
+      document.getElementById(b.getAttribute("aria-controls")).hidden = true;
+    }});
+  }}
+  boutons.forEach(function (b) {{
+    b.addEventListener("click", function (e) {{
+      e.stopPropagation();
+      var ouvert = b.getAttribute("aria-expanded") === "true";
+      fermer(b);
+      b.setAttribute("aria-expanded", ouvert ? "false" : "true");
+      document.getElementById(b.getAttribute("aria-controls")).hidden = ouvert;
+    }});
+  }});
+  document.addEventListener("click", function (e) {{ if (!e.target.closest(".som-groupe")) fermer(); }});
+  document.addEventListener("keydown", function (e) {{
+    if (e.key !== "Escape") return;
+    var b = document.activeElement && document.activeElement.closest(".som-groupe");
+    fermer();
+    if (b) b.querySelector(".som-btn").focus();
+  }});
   var liens = Array.prototype.slice.call(document.querySelectorAll(".sommaire a"));
-  if (!("IntersectionObserver" in window) || !liens.length) return;
+  if (!liens.length) return;
   var visibles = {{}}, pause = 0;
   function marquer(id) {{
     liens.forEach(function (a) {{
       var on = a.getAttribute("href") === "#" + id;
       a.classList.toggle("actif", on);
-      if (on) {{ a.setAttribute("aria-current", "true"); a.scrollIntoView({{ block: "nearest", inline: "nearest" }}); }}
-      else a.removeAttribute("aria-current");
+      if (on) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
+    }});
+    // Le bouton de la catégorie qui contient la section en cours s'allume aussi
+    boutons.forEach(function (b) {{
+      b.classList.toggle("actif", !!document.getElementById(b.getAttribute("aria-controls")).querySelector("a.actif"));
     }});
   }}
+  liens.forEach(function (a) {{
+    a.addEventListener("click", function () {{ pause = Date.now() + 1200; marquer(a.getAttribute("href").slice(1)); fermer(); }});
+  }});
+  if (!("IntersectionObserver" in window)) return;
   var obs = new IntersectionObserver(function (entrees) {{
     entrees.forEach(function (e) {{ visibles[e.target.id] = e.isIntersecting; }});
     if (Date.now() < pause) return;
@@ -1168,7 +1224,6 @@ footer a {{ color: inherit; }}
   liens.forEach(function (a) {{
     var cible = document.querySelector(a.getAttribute("href"));
     if (cible) obs.observe(cible);
-    a.addEventListener("click", function () {{ pause = Date.now() + 1200; marquer(a.getAttribute("href").slice(1)); }});
   }});
 }})();
 </script>
