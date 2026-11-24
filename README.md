@@ -2,8 +2,9 @@
 
 ![Dashboard: key figures and amounts by year and public policy](docs/screenshot.png)
 
-**Live dashboard:** <https://pomnade231-lang.github.io/subventions-morbihan/dashboard.html>
-(GitHub Pages; a single self-contained page, about 5 MB)
+**Live dashboard:** <https://mariecourraud.github.io/subventions-morbihan/>
+(GitHub Pages; the address redirects to `dashboard.html`, a single self-contained page of
+about 5 MB)
 
 The dashboard is in French, because it covers French public data. This README explains it in
 English.
