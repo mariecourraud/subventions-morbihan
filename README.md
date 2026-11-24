@@ -56,10 +56,27 @@ existing one, so recorded decisions cannot be lost by accident. The scripts chec
 files they read: a policy label outside the grid or an inconsistent renewal exclusion stops the
 run with an explicit error; a merge pointing to an unknown ID is reported and skipped.
 
-`dashboard.html` is a single self-contained page (plotly embedded, works offline). Each chart has
-a data table underneath, and the page follows the system's light or dark mode. On narrow screens
-(phones), multi-panel charts switch to two columns, long names are shortened (full name on hover)
-and the heatmap drops its type column; the desktop layout comes back when the window widens.
+`dashboard.html` is a single page with plotly embedded. Most charts have a data table
+underneath. The page always uses a light theme. Headings use Georgia and body text uses Poppins.
+Poppins is loaded from Google Fonts: offline, the page falls back to the system font, and each
+visit sends the visitor's IP address to Google. On narrow screens (phones), long names are
+shortened (full name on hover), axis tick labels of the bar charts are hidden (amounts are written
+on the bars) and the heatmap drops its type column; the desktop layout comes back when the window
+widens.
+
+**Layout.** A light grey header holds the title, a note that the document is provisional and not
+official data, a quotation, and four key-figure tiles. Below it, a menu bar stays visible while
+scrolling, with three entries: *Dépense globale* and *Solidarités* open drop-down menus listing
+their sections, and *Limites* links straight to the last section. The section being read is
+highlighted in the menu.
+
+**Colours.** Each public policy has a pair of colours (dark, light) taken from a nine-palette set:
+*Enfance et famille* mustard, *Insertion* berry red, *Autonomie* lavender, *Solidarité des
+territoires* orange, *Infrastructures et mobilité* and *Ressources* two blues, *Environnement*
+green, *Éducation* pink, *Attractivité et animation territoriales* indigo; *Non ventilé* stays
+grey. The dark colour is used everywhere a policy appears; the light one only in the heatmap
+scale. Charts that are not about a policy (beneficiary types, top beneficiaries, renewal) use
+greys only, so a colour always means a policy.
 
 ## What the dashboard shows
 
@@ -81,10 +98,22 @@ who receives them. Objects too generic to be classed with certainty are marked *
 | *Non ventilé* | 1.8 | 9.0 | 5.9 | 5.3 | 22.0 | 5.3% |
 | **Total** | **82.0** | **108.4** | **121.8** | **104.8** | **417.0** | **100%** |
 
-**Sections**, in order: key figures; amounts by year and policy (stacked bars); one small chart
-per policy; breakdown by beneficiary type, next to a data quality and limitations box; top 15
-beneficiaries; top 10 beneficiaries of each solidarity group; a heatmap of *Insertion – hors
-FSE*; beneficiary renewal in the solidarity groups.
+**Sections**, in order:
+
+- *Dépense globale*:
+  - amounts by year and policy: stacked bars with each year's total on top, *Non ventilé*
+    hatched, and a legend beside the chart giving each policy's total and share, sorted from the
+    largest amount to the smallest (*Non ventilé* last);
+  - evolution of each policy: one dark grey card per policy, marked by a small square of its
+    colour, with the latest amount, the change since 2020 and a small line on its own scale;
+  - breakdown by beneficiary type ("typologie"), with a footnote on *Commune*: a municipality can
+    receive funding directly (e.g. works) or for a public body or association it runs;
+  - main beneficiaries: the top 15.
+- *Solidarités*:
+  - main beneficiaries: the top 10 of each solidarity group, one tab per group;
+  - *Insertion – hors FSE*, beneficiaries by year (heatmap, see below);
+  - beneficiary renewal.
+- *Limites*: data quality and limitations, at the end of the page.
 
 **Display choices for social policies** (the official columns are never changed):
 
@@ -92,18 +121,24 @@ FSE*; beneficiary renewal in the solidarity groups.
   *Insertion et développement social*, and *Autonomie* (older people + people with disabilities).
 - Within *Insertion*, the evolution chart and the beneficiary tables separate, grant by grant,
   *Insertion – fonds européens (FSE)* (object exactly "Subventions FSE") from *Insertion – hors
-  FSE*. FSE grants are European funds managed by the Department, not only its own credits. A
-  structure receiving both appears in both tables with the amount of each.
-- The *Autonomie* panel adds a grey line without Morbihan Habitat, which received €1,168,389
+  FSE*. FSE (Fonds social européen) is a European Union fund for employment and inclusion, part of
+  which the Department manages; the section introductions explain it. A structure receiving both
+  appears in both tables with the amount of each.
+- The *Autonomie* card adds a dashed line without Morbihan Habitat, which received €1,168,389
   classed in Autonomie in 2020–2021 and none afterwards, its later grants falling under
   *Solidarité des territoires / Habitat*. Without it, Autonomie is €5.7 M instead of €6.8 M in
   2020; the two lines merge from 2022.
-- The heatmap shows the top 40 beneficiaries of *Insertion – hors FSE* (97.4% of its €4.6 M) by
-  year, plus a separate *Total* column: one blue scale from light to dark, logarithmic because
-  yearly amounts range from €2k to €207k (amounts are not smoothed; exact euros on hover), grey
-  cells for years without a grant, beneficiary type on the left and a ◆ for *probably multi-year*
-  pairs. A note reminds that amounts are recorded in the year of the decision, so a multi-year
-  agreement shows up once, followed by empty years, without the funding having stopped.
+- The heatmap shows all 70 named beneficiaries of *Insertion – hors FSE* (€4.6 M) by year. Twenty
+  rows are visible at a time; the rest scroll continuously with the mouse wheel, a finger drag or
+  the ▲ ▼ buttons. A separate *Moyenne* column gives the average amount per funded year (the
+  beneficiary's total divided by the number of years with at least one grant), and rows are
+  sorted on it, highest first. One colour scale, from light to dark berry red, covers both the
+  yearly cells and the average; it is logarithmic because yearly amounts range from a few hundred
+  euros to about €200k (exact euros on hover). Grey cells mark years without a grant; the
+  beneficiary type is on the left and a ◆ marks *probably multi-year* pairs. The introduction
+  warns that a grant is recorded in the year it is voted, so a multi-year agreement appears once,
+  for its full amount, and the following years stay empty while the funding goes on. Acronyms in
+  the names (ETCLD, GEM, TSA) are spelled out under the chart and on hover.
 - In the beneficiary tables, anonymised beneficiaries are left out and counted in a note, rather
   than summed as if they were one organisation.
 
@@ -209,7 +244,8 @@ Results are also given without the entering and leaving pairs flagged as *probab
   19.8%, and the net balance from −5 to −12. The spike test also catches one-off investment grants
   (e.g. municipal nurseries), so it flags irregular funding rather than multi-year agreements
   strictly.
-- The colours of the three solidarity groups are three shades of one blue (the reference palette
-  has 8 hues). They do not pass every check of the palette validator; each chart has a data table
-  as a fallback.
+- The policy colours come from a design palette and were not run through a colour-blindness or
+  contrast check; the stacked chart's legend gives every amount in text, and most charts have a
+  data table as a fallback.
+- The screenshot at the top of this README shows an earlier version of the dashboard.
 - Next step: extract 2024–2026 grants from the PDF reports of the Commission permanente.
