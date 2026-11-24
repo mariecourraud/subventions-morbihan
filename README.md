@@ -54,9 +54,9 @@ the named lists of entering, leaving and one-off beneficiaries to `data/renouvel
 |---|--:|--:|--:|--:|
 | Beneficiaries in 2020 | 196 | 72 | 182 | 406 |
 | Present all period | 166 | 52 | 129 | 321 |
-| Entering / leaving | 45 / 30 | 12 / 20 | 32 / 53 | 81 / 85 |
-| Entry rate / exit rate | 23.0% / 15.3% | 16.7% / 27.8% | 17.6% / 29.1% | 20.0% / 20.9% |
-| Net balance | +15 | −8 | −21 | −4 |
+| Entering / leaving | 45 / 30 | 11 / 20 | 32 / 53 | 80 / 85 |
+| Entry rate / exit rate | 23.0% / 15.3% | 15.3% / 27.8% | 17.6% / 29.1% | 19.7% / 20.9% |
+| Net balance | +15 | −9 | −21 | −5 |
 
 For display only, the dashboard splits *Solidarités humaines* into three groups
 (`politique_affichage`): *Enfance et famille*, *Insertion et développement social*, and
@@ -70,7 +70,7 @@ from *Insertion – hors FSE*. FSE grants are European funds managed by the Depa
 Department's own credits. A structure receiving both appears in both tables with the amount of
 each. The renewal analysis keeps the three solidarity groups.
 
-A heatmap shows the top 40 beneficiaries of *Insertion – hors FSE* (97.2% of its €4.6 M) by year,
+A heatmap shows the top 40 beneficiaries of *Insertion – hors FSE* (97.4% of its €4.6 M) by year,
 plus a separate *Total* column: one blue scale from light (low) to dark (high), logarithmic because
 yearly amounts range from €2k to €207k (amounts are not smoothed; exact euros on hover), grey cells
 for years without a grant, beneficiary type on the left and a ◆ for *probably multi-year* pairs.
@@ -131,8 +131,12 @@ who receives it. Objects too generic to be classed with certainty are marked *No
 ## Human decisions
 
 - **Merges** are decided case by case in `ref/fusions.csv` (kept ID + reason). 12 names were
-  merged (30 rows); *Club de l'amitié* and *Club du bel âge* were kept separate because these names
-  belong to different clubs in different towns.
+  merged; *Club de l'amitié* and *Club du bel âge* were kept separate because these names
+  belong to different clubs in different towns. I also merged two IDs with *different* names,
+  *MISSION LOCALE de LORIENT* into *Mission Locale Pays de Lorient Réseaux*: the youth aid fund
+  (FAJ) goes to the second until 2022, then to the first in 2023. In all, 13 IDs and 34 rows are
+  merged. Caveat: both IDs also received a call-for-projects grant in 2021 and in 2022, now
+  summed.
 - **€0 amounts** are kept in the data and listed in `data/a_verifier.csv` for review, but they are
   excluded from totals (`inclus_totaux = False`) so they do not distort counts or averages.
 - **Anonymised beneficiaries** ("Tiers anonymisé", 61 rows) are never renamed, even when their ID
@@ -179,16 +183,16 @@ who receives it. Objects too generic to be classed with certainty are marked *No
 - The beneficiary type comes from the name only: 1,870 rows (€59.2 M) stay *Other*, mostly
   associations whose name gives no clue.
 - Renewal rests on four years only: nobody can be called "new" in 2020 (first year of data), and
-  nobody can be called "leaving" in 2023 (last year); 53 of the 89 entering pairs appear in 2023
+  nobody can be called "leaving" in 2023 (last year); 52 of the 88 entering pairs appear in 2023
   only and some will turn out to be one-off. Groups are small (a few dozen organisations), so a
   few beneficiaries move a rate by several points. The figures describe who is funded, not why.
 - Multi-year funding cannot be identified: the source columns `datesPeriodeVersement` and
   `conditionsVersement` are empty in all 12,514 rows. As a proxy, `renouvellement.py` flags a
   beneficiary × group pair as *probably multi-year* when it is funded every other year or every
-  third year, or when one year exceeds twice the median of its other years (49 pairs, listed in
+  third year, or when one year exceeds twice the median of its other years (48 pairs, listed in
   `data/pluriannuels_solidarites.csv`). FSE grants are ignored for this test because there are
   none in 2022, which would create false patterns. Without the 10 entering and 6 leaving pairs
-  flagged, the total entry rate falls from 20.0% to 16.8%, the exit rate from 20.9% to 19.8%, and
-  the net balance from −4 to −12. The spike test also catches one-off investment grants (e.g.
+  flagged, the total entry rate falls from 19.7% to 16.8%, the exit rate from 20.9% to 19.8%, and
+  the net balance from −5 to −12. The spike test also catches one-off investment grants (e.g.
   municipal nurseries), so it flags irregular funding rather than multi-year agreements strictly.
 - Next step: extract 2024–2026 grants from the PDF reports of the Commission permanente.
