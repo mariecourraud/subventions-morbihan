@@ -3691,6 +3691,10 @@ td:not(:first-child), th:not(:first-child) { text-align: right; }
 code { font-size: .85em; }
 footer { color: var(--ink2); font-size: .85rem; margin-top: 24px; }
 footer a { color: inherit; }
+.lien-depot { font-size: .85rem; color: var(--ink2); text-decoration: none; border-bottom: 1px solid var(--grid); }
+.lien-depot:hover, .lien-depot:focus-visible { color: var(--ink); border-bottom-color: currentColor; }
+.haut-depot { margin: 0 0 12px; }
+.bas-depot { margin: 8px 0 0; }
 @media (max-width: 760px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .duo { grid-template-columns: 1fr; }
@@ -3700,6 +3704,7 @@ footer a { color: inherit; }
 <body>
 <main>
 <header>
+  <p class="haut-depot"><a class="lien-depot" href="https://github.com/mariecourraud/subventions-morbihan">Méthode, code et limites (GitHub)</a></p>
   <h1>Subventions du Département du Morbihan, 2020–2023</h1>
   <p>Subventions aux personnes morales, ventilées selon la segmentation stratégique du Département au 1<sup>er</sup> janvier 2025.</p>
 </header>
@@ -3791,7 +3796,8 @@ footer a { color: inherit; }
 <footer>
   Source : Département du Morbihan, « Subventions aux personnes morales », data.gouv.fr, Licence Ouverte —
   <a href="https://www.data.gouv.fr/datasets/subventions-aux-personnes-morales/">https://www.data.gouv.fr/datasets/subventions-aux-personnes-morales/</a>. Fichier téléchargé le 23 novembre 2026.
-  Traitements : clean.py, fusions.py, categorize.py, build_dashboard.py.
+  Traitements : clean.py, fusions.py, categorize.py, renouvellement.py, build_dashboard.py.
+  <p class="bas-depot"><a class="lien-depot" href="https://github.com/mariecourraud/subventions-morbihan">Méthode, code et limites (GitHub)</a></p>
 </footer>
 </main>
 <script>

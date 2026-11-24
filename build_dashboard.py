@@ -19,6 +19,8 @@ SORTIE = RACINE / "dashboard.html"
 
 SOURCE_URL = "https://www.data.gouv.fr/datasets/subventions-aux-personnes-morales/"
 DATE_TELECHARGEMENT = "23 novembre 2026"
+DEPOT_URL = "https://github.com/mariecourraud/subventions-morbihan"
+LIEN_DEPOT = "Méthode, code et limites (GitHub)"
 
 # ---------------------------------------------------------------- Palette
 # Palette catégorielle de référence (ordre fixe, validé pour les paires adjacentes),
@@ -720,6 +722,10 @@ td:not(:first-child), th:not(:first-child) {{ text-align: right; }}
 code {{ font-size: .85em; }}
 footer {{ color: var(--ink2); font-size: .85rem; margin-top: 24px; }}
 footer a {{ color: inherit; }}
+.lien-depot {{ font-size: .85rem; color: var(--ink2); text-decoration: none; border-bottom: 1px solid var(--grid); }}
+.lien-depot:hover, .lien-depot:focus-visible {{ color: var(--ink); border-bottom-color: currentColor; }}
+.haut-depot {{ margin: 0 0 12px; }}
+.bas-depot {{ margin: 8px 0 0; }}
 @media (max-width: 760px) {{
   .kpis {{ grid-template-columns: repeat(2, 1fr); }}
   .duo {{ grid-template-columns: 1fr; }}
@@ -729,6 +735,7 @@ footer a {{ color: inherit; }}
 <body>
 <main>
 <header>
+  <p class="haut-depot"><a class="lien-depot" href="{DEPOT_URL}">{LIEN_DEPOT}</a></p>
   <h1>Subventions du Département du Morbihan, {a_min}–{a_max}</h1>
   <p>Subventions aux personnes morales, ventilées selon la segmentation stratégique du Département au 1<sup>er</sup> janvier 2025.</p>
 </header>
@@ -789,7 +796,8 @@ footer a {{ color: inherit; }}
 <footer>
   Source : Département du Morbihan, « Subventions aux personnes morales », data.gouv.fr, Licence Ouverte —
   <a href="{SOURCE_URL}">{SOURCE_URL}</a>. Fichier téléchargé le {DATE_TELECHARGEMENT}.
-  Traitements : clean.py, fusions.py, categorize.py, build_dashboard.py.
+  Traitements : clean.py, fusions.py, categorize.py, renouvellement.py, build_dashboard.py.
+  <p class="bas-depot"><a class="lien-depot" href="{DEPOT_URL}">{LIEN_DEPOT}</a></p>
 </footer>
 </main>
 <script>
