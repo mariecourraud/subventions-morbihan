@@ -247,5 +247,4 @@ Results are also given without the entering and leaving pairs flagged as *probab
 - The policy colours come from a design palette and were not run through a colour-blindness or
   contrast check; the stacked chart's legend gives every amount in text, and most charts have a
   data table as a fallback.
-- The screenshot at the top of this README shows an earlier version of the dashboard.
 - Next step: extract 2024–2026 grants from the PDF reports of the Commission permanente.
